@@ -4,12 +4,12 @@
 /* Brand header refinement */
 .heroLogo{display:none!important}
 nav{height:104px;background:#fff;color:#111;border-bottom:1px solid #e8e3d8;box-shadow:0 5px 24px rgba(0,0,0,.06)}
-.brandLogo{width:340px;height:102px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-right:auto}
-.brandLogo img{display:block;width:445px;height:297px;max-width:none;object-fit:contain}
+.brandLogo{width:272px;height:82px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-right:auto}
+.brandLogo img{display:block;width:356px;height:238px;max-width:none;object-fit:contain}
 .phone{color:#8a6b18}
 .lang{color:#111}
-@media(max-width:950px){nav{height:88px;padding:0 12px}.brandLogo{width:270px;height:86px}.brandLogo img{width:365px;height:243px}}
-@media(max-width:500px){.brandLogo{width:235px}.brandLogo img{width:330px;height:220px}.lang{padding:8px 3px}}
+@media(max-width:950px){nav{height:88px;padding:0 12px}.brandLogo{width:216px;height:69px}.brandLogo img{width:292px;height:194px}}
+@media(max-width:500px){.brandLogo{width:188px}.brandLogo img{width:264px;height:176px}.lang{padding:8px 3px}}
 
 /* Navigation legibility */
 .links{font-size:13px;gap:24px}.phone,.lang{font-size:13px}
