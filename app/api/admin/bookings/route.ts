@@ -1,10 +1,10 @@
 import { cookieToken, validAdminToken } from "../../../../lib/admin-auth";
-import { listAdminRecords, updateBookingStatus } from "../../../../db/store";
+import { databaseConfig, listAdminRecords, updateBookingStatus } from "../../../../db/store";
 
 export async function GET(request:Request) {
   if (!await validAdminToken(cookieToken(request))) return Response.json({error:"Unauthorized"},{status:401});
   try { return Response.json(await listAdminRecords()); }
-  catch (error) { console.error("Admin records failed", error); return Response.json({error:"Database unavailable"},{status:503}); }
+  catch (error) { const config=databaseConfig(); console.error("Admin records failed", error); return Response.json({error:config.configured?"Database connection failed":"Database URL is not configured",code:config.configured?"DB_CONNECTION_FAILED":"DB_URL_MISSING",source:config.source},{status:503}); }
 }
 
 export async function PATCH(request:Request) {
