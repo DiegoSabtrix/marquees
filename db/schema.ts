@@ -1,4 +1,27 @@
-// Intentionally empty by default.
-// Add Drizzle tables here when the site actually needs a database.
-// See examples/d1/db/schema.ts for an opt-in example.
-export {};
+import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+
+export const bookings = sqliteTable("bookings", {
+  id: text("id").primaryKey(),
+  createdAt: text("created_at").notNull(),
+  eventDate: text("event_date").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  phrase: text("phrase").notNull(),
+  service: text("service").notNull(),
+  fulfillment: text("fulfillment").notNull(),
+  zip: text("zip"),
+  floor: text("floor"),
+  elevator: text("elevator"),
+  customerName: text("customer_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  eventType: text("event_type"),
+  venue: text("venue"),
+  displayLocation: text("display_location"),
+  notes: text("notes"),
+  total: real("total").notNull(),
+  amountPaid: real("amount_paid").notNull().default(0),
+  paymentStatus: text("payment_status").notNull().default("Unpaid"),
+  status: text("status").notNull().default("New request"),
+  letterCount: integer("letter_count").notNull(),
+});
