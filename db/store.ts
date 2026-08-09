@@ -4,8 +4,9 @@ type Database = { kind:"postgres"; client:any } | { kind:"d1"; client:any };
 let databasePromise: Promise<Database> | null = null;
 
 function databaseUrl() {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
-  if (process.env.DATABASE_PUBLIC_URL) return process.env.DATABASE_PUBLIC_URL;
+  const normalize=(value:string)=>value.trim().replace(/^DATABASE_(?:PUBLIC_)?URL\s*=\s*/i,"").replace(/^['"]|['"]$/g,"");
+  if (process.env.DATABASE_URL) return normalize(process.env.DATABASE_URL);
+  if (process.env.DATABASE_PUBLIC_URL) return normalize(process.env.DATABASE_PUBLIC_URL);
   if (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD && process.env.PGDATABASE) {
     const user=encodeURIComponent(process.env.PGUSER), password=encodeURIComponent(process.env.PGPASSWORD);
     const port=process.env.PGPORT || "5432";
