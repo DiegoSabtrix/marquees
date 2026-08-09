@@ -27,7 +27,7 @@ export async function validAdminToken(token?: string) {
 }
 
 export function adminCredentialsValid(username: string, password: string) {
-  return username === (process.env.ADMIN_USERNAME || "Admin") && password === process.env.ADMIN_PASSWORD;
+  return username === (process.env.ADMIN_USERNAME || "admin2026") && password === process.env.ADMIN_PASSWORD;
 }
 
 export function cookieToken(request: Request) {
