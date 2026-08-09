@@ -25,3 +25,15 @@ export const bookings = sqliteTable("bookings", {
   status: text("status").notNull().default("New request"),
   letterCount: integer("letter_count").notNull(),
 });
+
+export const stripeSettings = sqliteTable("stripe_settings", {
+  id: text("id").primaryKey(),
+  activeMode: text("active_mode").notNull().default("test"),
+  testPublishableKey: text("test_publishable_key"),
+  testSecretKeyEncrypted: text("test_secret_key_encrypted"),
+  testWebhookSecretEncrypted: text("test_webhook_secret_encrypted"),
+  livePublishableKey: text("live_publishable_key"),
+  liveSecretKeyEncrypted: text("live_secret_key_encrypted"),
+  liveWebhookSecretEncrypted: text("live_webhook_secret_encrypted"),
+  updatedAt: text("updated_at").notNull(),
+});
