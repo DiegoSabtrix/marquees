@@ -23,7 +23,7 @@ async function connect(): Promise<Database> {
   const connectionString=databaseUrl();
   if (connectionString) {
     const { default: postgres } = await import("postgres");
-    const client = postgres(connectionString, { max:4, prepare:false, connect_timeout:8, idle_timeout:20 });
+    const client = postgres(connectionString, { ssl:"require", max:4, prepare:false, connect_timeout:8, idle_timeout:20 });
     const statements = [
       `CREATE TABLE IF NOT EXISTS bookings (id text PRIMARY KEY, created_at text NOT NULL, event_date text NOT NULL, start_time text NOT NULL, end_time text NOT NULL, phrase text NOT NULL, service text NOT NULL, fulfillment text NOT NULL, zip text, floor text, elevator text, customer_name text NOT NULL, email text NOT NULL, phone text, event_type text, venue text, display_location text, notes text, total double precision NOT NULL, amount_paid double precision NOT NULL DEFAULT 0, payment_status text NOT NULL DEFAULT 'Unpaid', status text NOT NULL DEFAULT 'New request', letter_count integer NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS stripe_settings (id text PRIMARY KEY, active_mode text NOT NULL DEFAULT 'test', test_publishable_key text, test_secret_key_encrypted text, test_webhook_secret_encrypted text, live_publishable_key text, live_secret_key_encrypted text, live_webhook_secret_encrypted text, updated_at text NOT NULL)`,
