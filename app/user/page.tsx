@@ -1,99 +1,40 @@
 "use client";
+import { FormEvent,useCallback,useEffect,useMemo,useState } from "react";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+type Booking=Record<string,any>;
+type Draft=Record<string,any>;
+type Attempt=Record<string,any>;
+type StripeInfo={mode:"test"|"live";publishableKey:string;secret:{configured:boolean;last4:string|null};webhook:{configured:boolean;last4:string|null};updatedAt:string|null};
+const statuses=["New request","Awaiting payment","In service","Ready for pickup","Picked up","Completed","Cancelled"];
+const emptyStripe:StripeInfo={mode:"test",publishableKey:"",secret:{configured:false,last4:null},webhook:{configured:false,last4:null},updatedAt:null};
+const money=(value:number)=>Number(value||0).toLocaleString("en-US",{style:"currency",currency:"USD"});
+const Logo=()=> <img className="adminBrandLogo" src="/brand/marquees-logo.png" alt="Marquees Lights & Events"/>;
 
-type Booking = { id:string; createdAt:string; eventDate:string; startTime:string; endTime:string; phrase:string; service:string; fulfillment:string; zip:string|null; floor:string|null; elevator:string|null; customerName:string; email:string; phone:string|null; eventType:string|null; venue:string|null; displayLocation:string|null; notes:string|null; total:number; amountPaid:number; paymentStatus:string; status:string; letterCount:number };
-type SecretState = { configured:boolean; last4:string|null };
-type StripeSettings = { activeMode:"test"|"live"; testPublishableKey:string; livePublishableKey:string; testSecret:SecretState; testWebhook:SecretState; liveSecret:SecretState; liveWebhook:SecretState; updatedAt:string|null };
-type StripeForm = { activeMode:"test"|"live"; testPublishableKey:string; testSecretKey:string; testWebhookSecret:string; livePublishableKey:string; liveSecretKey:string; liveWebhookSecret:string };
+export default function AdminPortal(){
+  const[authenticated,setAuthenticated]=useState<boolean|null>(null),[username,setUsername]=useState("admin2026"),[password,setPassword]=useState(""),[loginError,setLoginError]=useState(""),[loading,setLoading]=useState(false);
+  const[bookings,setBookings]=useState<Booking[]>([]),[drafts,setDrafts]=useState<Draft[]>([]),[attempts,setAttempts]=useState<Attempt[]>([]),[dataError,setDataError]=useState(""),[tab,setTab]=useState<"bookings"|"drafts"|"payments"|"stripe">("bookings"),[query,setQuery]=useState(""),[selected,setSelected]=useState<Booking|null>(null);
+  const[stripe,setStripe]=useState<StripeInfo>(emptyStripe),[stripeForm,setStripeForm]=useState({mode:"test" as "test"|"live",publishableKey:"",secretKey:"",webhookSecret:""}),[stripeMessage,setStripeMessage]=useState(""),[stripeSaving,setStripeSaving]=useState(false);
 
-const statuses = ["New request", "In service", "Ready for pickup", "Picked up", "Completed", "Cancelled"];
-const emptySecret = { configured:false, last4:null };
-const emptySettings: StripeSettings = { activeMode:"test", testPublishableKey:"", livePublishableKey:"", testSecret:emptySecret, testWebhook:emptySecret, liveSecret:emptySecret, liveWebhook:emptySecret, updatedAt:null };
+  const loadStripe=useCallback(async()=>{const response=await fetch("/api/admin/stripe-settings",{cache:"no-store"});if(response.ok){const data=await response.json();setStripe(data);setStripeForm({mode:data.mode,publishableKey:data.publishableKey||"",secretKey:"",webhookSecret:""});}},[]);
+  const load=useCallback(async()=>{setDataError("");const response=await fetch("/api/admin/bookings",{cache:"no-store"});if(response.status===401){setAuthenticated(false);return}if(!response.ok){setAuthenticated(true);setDataError("The database did not respond. Check the Railway DATABASE_URL variable.");return}const data=await response.json();setBookings(data.bookings||[]);setDrafts(data.drafts||[]);setAttempts(data.attempts||[]);setAuthenticated(true);void loadStripe();},[loadStripe]);
+  useEffect(()=>{void load()},[load]);
 
-function Logo() {
-  return <img className="adminBrandLogo" src="/brand/marquees-logo.png" alt="Marquees Lights & Events" />;
-}
+  async function login(event:FormEvent){event.preventDefault();setLoading(true);setLoginError("");const response=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username,password})});if(response.ok){setPassword("");await load()}else setLoginError("Incorrect username or password");setLoading(false)}
+  async function logout(){await fetch("/api/admin/logout",{method:"POST"});setAuthenticated(false)}
+  async function changeStatus(id:string,status:string){const response=await fetch("/api/admin/bookings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,status})});if(response.ok)setBookings(current=>current.map(item=>item.id===id?{...item,status}:item));}
+  async function switchMode(mode:"test"|"live"){setStripeMessage("");const response=await fetch("/api/admin/stripe-settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode})});if(!response.ok){const data=await response.json();setStripeMessage(data.error||"Configure this mode before activating it");return}await loadStripe();}
+  async function saveStripe(event:FormEvent){event.preventDefault();setStripeSaving(true);setStripeMessage("");const response=await fetch("/api/admin/stripe-settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(stripeForm)});const data=await response.json();setStripeMessage(response.ok?"Stripe settings saved securely.":data.error||"Unable to save settings");if(response.ok)await loadStripe();setStripeSaving(false)}
 
-export default function AdminPortal() {
-  const [authenticated,setAuthenticated] = useState<boolean|null>(null);
-  const [items,setItems] = useState<Booking[]>([]);
-  const [username,setUsername] = useState("admin2026");
-  const [password,setPassword] = useState("");
-  const [error,setError] = useState("");
-  const [query,setQuery] = useState("");
-  const [statusFilter,setStatusFilter] = useState("All");
-  const [dateFilter,setDateFilter] = useState("");
-  const [selected,setSelected] = useState<Booking|null>(null);
-  const [loading,setLoading] = useState(false);
-  const [tab,setTab] = useState<"requests"|"stripe">("requests");
-  const [stripe,setStripe] = useState<StripeSettings>(emptySettings);
-  const [stripeForm,setStripeForm] = useState<StripeForm>({ activeMode:"test", testPublishableKey:"", testSecretKey:"", testWebhookSecret:"", livePublishableKey:"", liveSecretKey:"", liveWebhookSecret:"" });
-  const [stripeMessage,setStripeMessage] = useState("");
-  const [stripeSaving,setStripeSaving] = useState(false);
+  const filtered=useMemo(()=>bookings.filter(item=>!query||`${item.customer_name} ${item.email} ${item.phrase} ${item.id}`.toLowerCase().includes(query.toLowerCase())),[bookings,query]);
+  if(authenticated===null)return <main className="adminLoading">Connecting to the secure portal…</main>;
+  if(!authenticated)return <main className="adminLogin"><form onSubmit={login}><Logo/><h1>Admin Portal</h1><span>Secure access for authorized staff.</span><label>Username<input value={username} onChange={e=>setUsername(e.target.value)} autoComplete="username"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password"/></label>{loginError&&<div className="loginError">{loginError}</div>}<button disabled={loading}>{loading?"SIGNING IN…":"SIGN IN"}</button></form></main>;
 
-  const loadStripe = useCallback(async () => {
-    const response = await fetch("/api/admin/stripe-settings", { cache:"no-store" });
-    if (!response.ok) return;
-    const data: StripeSettings = await response.json();
-    setStripe(data);
-    setStripeForm(current => ({ ...current, activeMode:data.activeMode, testPublishableKey:data.testPublishableKey, livePublishableKey:data.livePublishableKey, testSecretKey:"", testWebhookSecret:"", liveSecretKey:"", liveWebhookSecret:"" }));
-  }, []);
-
-  const load = useCallback(async () => {
-    const response = await fetch("/api/admin/bookings", { cache:"no-store" });
-    if (response.status === 401) { setAuthenticated(false); return; }
-    if (response.ok) { setItems(await response.json()); setAuthenticated(true); void loadStripe(); }
-  }, [loadStripe]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  async function login(event:FormEvent) {
-    event.preventDefault(); setLoading(true); setError("");
-    const response = await fetch("/api/admin/login", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({username,password}) });
-    if (response.ok) { setPassword(""); await load(); } else setError("Incorrect username or password");
-    setLoading(false);
-  }
-
-  async function logout() { await fetch("/api/admin/logout", { method:"POST" }); setItems([]); setAuthenticated(false); }
-  async function changeStatus(id:string,status:string) { await fetch("/api/admin/bookings", { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({id,status}) }); setItems(current=>current.map(x=>x.id===id?{...x,status}:x)); setSelected(current=>current?.id===id?{...current,status}:current); }
-
-  async function saveStripe(event:FormEvent) {
-    event.preventDefault(); setStripeSaving(true); setStripeMessage("");
-    const response = await fetch("/api/admin/stripe-settings", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(stripeForm) });
-    const result = await response.json() as { error?:string };
-    if (!response.ok) setStripeMessage(result.error || "Unable to save Stripe settings");
-    else { setStripeMessage("Stripe settings saved securely."); await loadStripe(); }
-    setStripeSaving(false);
-  }
-
-  const filtered = useMemo(() => items.filter(x => (statusFilter==="All"||x.status===statusFilter) && (!dateFilter||x.eventDate===dateFilter) && (!query||`${x.customerName} ${x.email} ${x.phone} ${x.phrase} ${x.id} ${x.eventType}`.toLowerCase().includes(query.toLowerCase()))), [items,statusFilter,dateFilter,query]);
-  const money = (value:number) => value.toLocaleString("en-US", { style:"currency", currency:"USD" });
-  const secretHint = (secret:SecretState) => secret.configured ? `Saved securely · ends in ${secret.last4 || "••••"}` : "Not configured";
-
-  if (authenticated === null) return <main className="adminLoading">Loading secure portal…</main>;
-  if (!authenticated) return <main className="adminLogin"><form onSubmit={login}><Logo/><p>MARQUEES LIGHTS & EVENTS</p><h1>Admin Portal</h1><span>Secure access for authorized staff only.</span><label>Username<input autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)}/></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></label>{error&&<div className="loginError">{error}</div>}<button disabled={loading}>{loading?"SIGNING IN…":"SIGN IN"}</button><small>Protected session · Automatic logout after 8 hours</small></form></main>;
-
-  return <main className="adminShell">
-    <header><div><Logo/><span><b>MARQUEES</b><small>Operations Portal</small></span></div><button onClick={logout}>Log out ↗</button></header>
-    <nav className="adminTabs"><button className={tab==="requests"?"active":""} onClick={()=>setTab("requests")}>Requests</button><button className={tab==="stripe"?"active":""} onClick={()=>setTab("stripe")}>Stripe settings</button></nav>
-    {tab === "requests" ? <section className="adminContent">
-      <div className="adminTitle"><div><p>OPERATIONS OVERVIEW</p><h1>Event requests</h1><span>Track leads, payments and service progress.</span></div><button onClick={load}>↻ Refresh</button></div>
-      <div className="adminStats"><article><span>Total requests</span><b>{items.length}</b></article><article><span>Upcoming events</span><b>{items.filter(x=>x.eventDate>=new Date().toISOString().slice(0,10)&&x.status!=="Cancelled").length}</b></article><article><span>Collected</span><b>{money(items.reduce((sum,x)=>sum+x.amountPaid,0))}</b></article><article><span>Open services</span><b>{items.filter(x=>!["Completed","Cancelled"].includes(x.status)).length}</b></article></div>
-      <div className="adminFilters"><input placeholder="Search customer, word, email or request…" value={query} onChange={e=>setQuery(e.target.value)}/><input type="date" value={dateFilter} onChange={e=>setDateFilter(e.target.value)}/><select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option>All</option>{statuses.map(x=><option key={x}>{x}</option>)}</select></div>
-      <div className="adminTable"><table><thead><tr><th>Event date</th><th>Customer</th><th>Service</th><th>Total / Paid</th><th>Status</th><th></th></tr></thead><tbody>{filtered.map(item=><tr key={item.id}><td><b>{new Date(`${item.eventDate}T12:00:00`).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</b><small>{item.startTime}–{item.endTime}</small></td><td><b>{item.customerName}</b><small>{item.email}</small></td><td><b>{item.phrase}</b><small>{item.eventType||item.service}</small></td><td><b>{money(item.total)}</b><small>{money(item.amountPaid)} paid</small></td><td><select className={`statusSelect status-${item.status.replaceAll(" ","").toLowerCase()}`} value={item.status} onChange={e=>changeStatus(item.id,e.target.value)}>{statuses.map(x=><option key={x}>{x}</option>)}</select></td><td><button className="viewButton" onClick={()=>setSelected(item)}>View →</button></td></tr>)}</tbody></table>{!filtered.length&&<div className="emptyState">No requests match these filters.</div>}</div>
-    </section> : <section className="adminContent stripeSettings">
-      <div className="adminTitle"><div><p>SUPER ADMIN</p><h1>Stripe settings</h1><span>Manage test and production credentials without exposing secret keys.</span></div></div>
-      <form onSubmit={saveStripe}>
-        <div className="stripeMode"><div><b>Active payment environment</b><span>The website will use the selected environment for new payments.</span></div><div className="modeButtons"><button type="button" className={stripeForm.activeMode==="test"?"active":""} onClick={()=>setStripeForm(x=>({...x,activeMode:"test"}))}>Test</button><button type="button" className={stripeForm.activeMode==="live"?"active live":""} onClick={()=>setStripeForm(x=>({...x,activeMode:"live"}))}>Production</button></div></div>
-        <div className="stripeSecurity">🔒 Secret keys are encrypted before storage and are never displayed again. Leave a secret field blank to keep its saved value.</div>
-        <div className="stripeGrid">
-          <fieldset><legend><span>TEST</span> Sandbox credentials</legend><label>Publishable key<input value={stripeForm.testPublishableKey} onChange={e=>setStripeForm(x=>({...x,testPublishableKey:e.target.value}))} placeholder="pk_test_…"/></label><label>Secret key<input type="password" value={stripeForm.testSecretKey} onChange={e=>setStripeForm(x=>({...x,testSecretKey:e.target.value}))} placeholder={stripe.testSecret.configured?"Enter a new key to replace it":"sk_test_…"}/><small>{secretHint(stripe.testSecret)}</small></label><label>Webhook signing secret<input type="password" value={stripeForm.testWebhookSecret} onChange={e=>setStripeForm(x=>({...x,testWebhookSecret:e.target.value}))} placeholder={stripe.testWebhook.configured?"Enter a new secret to replace it":"whsec_…"}/><small>{secretHint(stripe.testWebhook)}</small></label></fieldset>
-          <fieldset className="liveCredentials"><legend><span>LIVE</span> Production credentials</legend><label>Publishable key<input value={stripeForm.livePublishableKey} onChange={e=>setStripeForm(x=>({...x,livePublishableKey:e.target.value}))} placeholder="pk_live_…"/></label><label>Secret key<input type="password" value={stripeForm.liveSecretKey} onChange={e=>setStripeForm(x=>({...x,liveSecretKey:e.target.value}))} placeholder={stripe.liveSecret.configured?"Enter a new key to replace it":"sk_live_…"}/><small>{secretHint(stripe.liveSecret)}</small></label><label>Webhook signing secret<input type="password" value={stripeForm.liveWebhookSecret} onChange={e=>setStripeForm(x=>({...x,liveWebhookSecret:e.target.value}))} placeholder={stripe.liveWebhook.configured?"Enter a new secret to replace it":"whsec_…"}/><small>{secretHint(stripe.liveWebhook)}</small></label></fieldset>
-        </div>
-        <div className="stripeSave"><span>{stripe.updatedAt?`Last updated ${new Date(stripe.updatedAt).toLocaleString()}`:"No credentials saved yet"}</span>{stripeMessage&&<b className={stripeMessage.includes("saved")?"ok":"bad"}>{stripeMessage}</b>}<button disabled={stripeSaving}>{stripeSaving?"Saving…":"Save Stripe settings"}</button></div>
-      </form>
-    </section>}
-    {selected&&<div className="adminOverlay" onClick={()=>setSelected(null)}><aside onClick={e=>e.stopPropagation()}><button className="closeDetail" onClick={()=>setSelected(null)}>×</button><p className="eyebrow">{selected.id}</p><h2>{selected.customerName}</h2><div className="detailStatus"><span>Status</span><select value={selected.status} onChange={e=>changeStatus(selected.id,e.target.value)}>{statuses.map(x=><option key={x}>{x}</option>)}</select></div><h3>Event</h3><dl><div><dt>Date & time</dt><dd>{selected.eventDate}<br/>{selected.startTime}–{selected.endTime}</dd></div><div><dt>Service</dt><dd>{selected.phrase}<br/>{selected.service}</dd></div><div><dt>Event type</dt><dd>{selected.eventType||"—"}</dd></div><div><dt>Venue</dt><dd>{selected.venue||"—"}<br/>{selected.displayLocation}</dd></div><div><dt>Fulfillment</dt><dd>{selected.fulfillment}{selected.zip?` · ${selected.zip}`:""}</dd></div></dl><h3>Customer</h3><dl><div><dt>Name</dt><dd>{selected.customerName}</dd></div><div><dt>Email</dt><dd><a href={`mailto:${selected.email}`}>{selected.email}</a></dd></div><div><dt>Phone</dt><dd><a href={`tel:${selected.phone}`}>{selected.phone||"—"}</a></dd></div></dl><h3>Payment</h3><div className="paymentBox"><span>Total <b>{money(selected.total)}</b></span><span>Paid <b>{money(selected.amountPaid)}</b></span><small>{selected.paymentStatus}</small></div>{selected.notes&&<><h3>Notes</h3><p className="detailNotes">{selected.notes}</p></>}</aside></div>}
+  return <main className="adminShell"><header><Logo/><button onClick={logout}>Log out ↗</button></header><nav className="adminTabs"><button className={tab==="bookings"?"active":""} onClick={()=>setTab("bookings")}>Bookings <b>{bookings.length}</b></button><button className={tab==="drafts"?"active":""} onClick={()=>setTab("drafts")}>Abandoned carts <b>{drafts.length}</b></button><button className={tab==="payments"?"active":""} onClick={()=>setTab("payments")}>Payments <b>{attempts.length}</b></button><button className={tab==="stripe"?"active":""} onClick={()=>setTab("stripe")}>Stripe</button></nav>
+  {dataError&&<div className="adminDataError">{dataError}<button onClick={load}>Retry</button></div>}
+  {tab==="bookings"&&<section className="adminContent"><div className="adminTitle"><div><p>OPERATIONS</p><h1>Bookings</h1><span>Reservations, payment status and service progress.</span></div><button onClick={load}>↻ Refresh</button></div><div className="adminStats"><article><span>Total</span><b>{bookings.length}</b></article><article><span>Paid</span><b>{bookings.filter(x=>x.payment_status==="Paid").length}</b></article><article><span>Collected</span><b>{money(bookings.reduce((sum,x)=>sum+Number(x.amount_paid||0),0))}</b></article><article><span>Open services</span><b>{bookings.filter(x=>!["Completed","Cancelled"].includes(x.status)).length}</b></article></div><div className="adminFilters"><input placeholder="Search customer, email, phrase or booking…" value={query} onChange={e=>setQuery(e.target.value)}/></div><div className="adminTable"><table><thead><tr><th>Event</th><th>Customer</th><th>Service</th><th>Payment</th><th>Status</th><th></th></tr></thead><tbody>{filtered.map(item=><tr key={item.id}><td><b>{item.event_date}</b><small>{item.start_time}–{item.end_time}</small></td><td><b>{item.customer_name}</b><small>{item.email}</small></td><td><b>{item.phrase}</b><small>{item.fulfillment}</small></td><td><b>{money(item.total)}</b><small>{item.payment_status} · {money(item.amount_paid)} paid</small></td><td><select className="statusSelect" value={item.status} onChange={e=>changeStatus(item.id,e.target.value)}>{statuses.map(status=><option key={status}>{status}</option>)}</select></td><td><button className="viewButton" onClick={()=>setSelected(item)}>View →</button></td></tr>)}</tbody></table>{!filtered.length&&<div className="emptyState">No bookings found.</div>}</div></section>}
+  {tab==="drafts"&&<section className="adminContent"><div className="adminTitle"><div><p>LEAD RECOVERY</p><h1>Abandoned carts</h1><span>Progress saved before payment, including partial contact information.</span></div><button onClick={load}>↻ Refresh</button></div><div className="adminTable rounded"><table><thead><tr><th>Last activity</th><th>Lead</th><th>Progress</th><th>Estimated total</th><th>Details</th></tr></thead><tbody>{drafts.map(draft=>{let data:any={};try{data=JSON.parse(draft.data||"{}")}catch{}return <tr key={draft.id}><td><b>{new Date(draft.updated_at).toLocaleString()}</b></td><td><b>{draft.customer_name||"Anonymous visitor"}</b><small>{draft.email||"Contact not entered yet"}</small></td><td><b>Step {draft.current_step} of 5</b><small>{draft.status}</small></td><td><b>{money(draft.total)}</b></td><td><small>{data.phrase||"—"} · {data.eventDate||"No date"}</small></td></tr>})}</tbody></table>{!drafts.length&&<div className="emptyState">No abandoned carts.</div>}</div></section>}
+  {tab==="payments"&&<section className="adminContent"><div className="adminTitle"><div><p>PAYMENT ACTIVITY</p><h1>Stripe attempts</h1><span>Successful, pending, cancelled and expired checkouts.</span></div><button onClick={load}>↻ Refresh</button></div><div className="adminTable rounded"><table><thead><tr><th>Created</th><th>Booking</th><th>Environment</th><th>Amount</th><th>Status</th><th>Error</th></tr></thead><tbody>{attempts.map(item=><tr key={item.id}><td>{new Date(item.created_at).toLocaleString()}</td><td><b>{item.booking_id}</b></td><td><span className={`modeBadge ${item.mode}`}>{item.mode}</span></td><td><b>{money(item.amount)}</b></td><td><b>{item.status}</b></td><td><small>{item.error||"—"}</small></td></tr>)}</tbody></table>{!attempts.length&&<div className="emptyState">No payment attempts yet.</div>}</div></section>}
+  {tab==="stripe"&&<section className="adminContent stripeSettings"><div className="adminTitle"><div><p>PAYMENT CONFIGURATION</p><h1>Stripe</h1><span>Only the selected environment is used for new payments.</span></div></div><div className="stripeMode"><div><b>Active environment</b><span className={`activeEnvironment ${stripe.mode}`}>{stripe.mode==="test"?"TEST MODE":"LIVE PAYMENTS"}</span></div><div className="modeButtons"><button className={stripe.mode==="test"?"active":""} onClick={()=>switchMode("test")}>Test</button><button className={stripe.mode==="live"?"active live":""} onClick={()=>switchMode("live")}>Live</button></div></div><form onSubmit={saveStripe}><div className="stripeSecurity">🔒 You are editing <b>{stripeForm.mode.toUpperCase()}</b> credentials. Secret values are encrypted and never displayed after saving.</div><fieldset className="singleStripeCard"><legend>{stripeForm.mode==="test"?"Test credentials":"Live credentials"}</legend><label>Publishable key<input value={stripeForm.publishableKey} onChange={e=>setStripeForm(x=>({...x,publishableKey:e.target.value}))} placeholder={`pk_${stripeForm.mode}_…`}/></label><label>Secret key<input type="password" value={stripeForm.secretKey} onChange={e=>setStripeForm(x=>({...x,secretKey:e.target.value}))} placeholder={stripe.secret.configured?"Enter a new key only to replace it":`sk_${stripeForm.mode}_…`}/><small>{stripe.secret.configured?`Saved securely · ends in ${stripe.secret.last4||"••••"}`:"Not configured"}</small></label><label>Webhook signing secret<input type="password" value={stripeForm.webhookSecret} onChange={e=>setStripeForm(x=>({...x,webhookSecret:e.target.value}))} placeholder={stripe.webhook.configured?"Enter a new secret only to replace it":"whsec_…"}/><small>{stripe.webhook.configured?`Saved securely · ends in ${stripe.webhook.last4||"••••"}`:"Not configured"}</small></label></fieldset><div className="stripeSave"><span>{stripe.updatedAt?`Last updated ${new Date(stripe.updatedAt).toLocaleString()}`:"No credentials saved"}</span>{stripeMessage&&<b className={stripeMessage.includes("saved")?"ok":"bad"}>{stripeMessage}</b>}<button disabled={stripeSaving}>{stripeSaving?"Saving…":"Save credentials"}</button></div></form></section>}
+  {selected&&<div className="adminOverlay" onClick={()=>setSelected(null)}><aside onClick={e=>e.stopPropagation()}><button className="closeDetail" onClick={()=>setSelected(null)}>×</button><p className="eyebrow">{selected.id}</p><h2>{selected.customer_name}</h2><h3>Event</h3><dl>{[["Date",selected.event_date],["Time",`${selected.start_time}–${selected.end_time}`],["Service",selected.phrase],["Venue",selected.venue||"—"],["Fulfillment",selected.fulfillment]].map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl><h3>Customer</h3><dl><div><dt>Email</dt><dd>{selected.email}</dd></div><div><dt>Phone</dt><dd>{selected.phone||"—"}</dd></div></dl><h3>Payment</h3><div className="paymentBox"><span>Total <b>{money(selected.total)}</b></span><span>Paid <b>{money(selected.amount_paid)}</b></span><small>{selected.payment_status}</small></div></aside></div>}
   </main>;
 }

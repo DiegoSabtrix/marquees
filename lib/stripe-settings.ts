@@ -43,3 +43,10 @@ export async function secretSummary(value: string | null) {
     return { configured: true, last4: null };
   }
 }
+
+export function safeSecretMatch(a:string,b:string) {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let index=0; index<a.length; index++) result |= a.charCodeAt(index) ^ b.charCodeAt(index);
+  return result === 0;
+}

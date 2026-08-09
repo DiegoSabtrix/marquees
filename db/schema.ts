@@ -37,3 +37,29 @@ export const stripeSettings = sqliteTable("stripe_settings", {
   liveWebhookSecretEncrypted: text("live_webhook_secret_encrypted"),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const bookingDrafts = sqliteTable("booking_drafts", {
+  id: text("id").primaryKey(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  currentStep: integer("current_step").notNull().default(1),
+  status: text("status").notNull().default("In progress"),
+  email: text("email"),
+  customerName: text("customer_name"),
+  total: real("total").notNull().default(0),
+  data: text("data").notNull(),
+  bookingId: text("booking_id"),
+});
+
+export const paymentAttempts = sqliteTable("payment_attempts", {
+  id: text("id").primaryKey(),
+  bookingId: text("booking_id").notNull(),
+  draftId: text("draft_id"),
+  stripeSessionId: text("stripe_session_id"),
+  mode: text("mode").notNull(),
+  amount: real("amount").notNull(),
+  status: text("status").notNull(),
+  error: text("error"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
