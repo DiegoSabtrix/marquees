@@ -17,6 +17,10 @@ async function getPostgresDb(databaseUrl: string) {
       phrase text NOT NULL,
       service text NOT NULL,
       fulfillment text NOT NULL,
+      address text,
+      address_2 text,
+      city text,
+      state text,
       zip text,
       floor text,
       elevator text,
@@ -44,6 +48,10 @@ async function getPostgresDb(databaseUrl: string) {
       live_webhook_secret_encrypted text,
       updated_at text NOT NULL
     );
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS address text;
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS address_2 text;
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS city text;
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS state text;
   `);
   postgresDb = postgresDrizzle(client) as unknown;
   return postgresDb;
