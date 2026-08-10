@@ -40,7 +40,11 @@ async function connect(): Promise<Database> {
     for (const statement of statements) await client.unsafe(statement);
     return { kind:"postgres", client };
   }
-  if (Object.keys(process.env).some(key=>key.startsWith("RAILWAY_"))) throw new Error("Railway PostgreSQL reference is missing or unresolved");
+  // The Cloudflare binding only exists in the Sites worker runtime. Railway runs
+  // this bundle in Node, where importing a `cloudflare:` URL is always invalid.
+  if (typeof process !== "undefined" && process.release?.name === "node") {
+    throw new Error("PostgreSQL is not configured. Set DATABASE_URL to the Railway Postgres service reference.");
+  }
   const { env } = await import("cloudflare:workers");
   if (!env.DB) throw new Error("Database binding is unavailable");
   await env.DB.batch([
