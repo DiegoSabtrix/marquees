@@ -1,5 +1,5 @@
 type Row = Record<string, unknown>;
-type Database = { kind:"postgres"; client:any } | { kind:"d1"; client:any };
+type Database = { client:any };
 
 let databasePromise: Promise<Database> | null = null;
 
@@ -38,22 +38,9 @@ async function connect(): Promise<Database> {
       `CREATE INDEX IF NOT EXISTS payment_attempts_booking_idx ON payment_attempts(booking_id)`,
     ];
     for (const statement of statements) await client.unsafe(statement);
-    return { kind:"postgres", client };
+    return { client };
   }
-  // The Cloudflare binding only exists in the Sites worker runtime. Railway runs
-  // this bundle in Node, where importing a `cloudflare:` URL is always invalid.
-  if (typeof process !== "undefined" && process.release?.name === "node") {
-    throw new Error("PostgreSQL is not configured. Set DATABASE_URL to the Railway Postgres service reference.");
-  }
-  const { env } = await import("cloudflare:workers");
-  if (!env.DB) throw new Error("Database binding is unavailable");
-  await env.DB.batch([
-    env.DB.prepare(`CREATE TABLE IF NOT EXISTS booking_drafts (id text PRIMARY KEY, created_at text NOT NULL, updated_at text NOT NULL, current_step integer NOT NULL DEFAULT 1, status text NOT NULL DEFAULT 'In progress', email text, customer_name text, total real NOT NULL DEFAULT 0, data text NOT NULL, booking_id text)`),
-    env.DB.prepare(`CREATE TABLE IF NOT EXISTS payment_attempts (id text PRIMARY KEY, booking_id text NOT NULL, draft_id text, stripe_session_id text, mode text NOT NULL, amount real NOT NULL, status text NOT NULL, error text, created_at text NOT NULL, updated_at text NOT NULL)`),
-    env.DB.prepare(`CREATE INDEX IF NOT EXISTS booking_drafts_updated_idx ON booking_drafts(updated_at DESC)`),
-    env.DB.prepare(`CREATE INDEX IF NOT EXISTS payment_attempts_booking_idx ON payment_attempts(booking_id)`),
-  ]);
-  return { kind:"d1", client:env.DB };
+  throw new Error("PostgreSQL is not configured. Set DATABASE_URL to the Railway Postgres service reference.");
 }
 
 async function db() {
@@ -67,15 +54,12 @@ export function databaseConfig() {
 
 export async function query<T extends Row = Row>(sql:string, values:unknown[] = []): Promise<T[]> {
   const database = await db();
-  if (database.kind === "postgres") return await database.client.unsafe(postgresSql(sql), values) as T[];
-  const result = await database.client.prepare(sql).bind(...values).all();
-  return (result.results || []) as T[];
+  return await database.client.unsafe(postgresSql(sql), values) as T[];
 }
 
 export async function execute(sql:string, values:unknown[] = []) {
   const database = await db();
-  if (database.kind === "postgres") return database.client.unsafe(postgresSql(sql), values);
-  return database.client.prepare(sql).bind(...values).run();
+  return database.client.unsafe(postgresSql(sql), values);
 }
 
 export async function listAdminRecords() {
