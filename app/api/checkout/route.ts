@@ -1,6 +1,17 @@
 import { createPendingBooking, createPaymentAttempt, attachStripeSession, failPaymentAttempt, getStripeSettings } from "../../../db/store";
 import { decryptStripeSecret } from "../../../lib/stripe-settings";
 
+function publicOrigin(request:Request) {
+  const configured=process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/,"");
+  if(configured) return configured;
+  const forwardedHost=request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host=forwardedHost||request.headers.get("host")?.trim();
+  const forwardedProto=request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const protocol=forwardedProto||"https";
+  if(host&&!/^(?:localhost|127\.0\.0\.1)(?::|$)/i.test(host)) return `${protocol}://${host}`;
+  return "https://www.atlantamarqueeletters.com";
+}
+
 export async function POST(request:Request) {
   try {
     const body=await request.json();
@@ -15,7 +26,7 @@ export async function POST(request:Request) {
     const amount=Math.round(Number(body.total)*100);
     if(!Number.isFinite(amount)||amount<50) return Response.json({error:"Invalid payment amount"},{status:400});
     const attemptId=await createPaymentAttempt({bookingId,draftId:body.draftId,mode,amount:amount/100,status:"Creating checkout"});
-    const origin=new URL(request.url).origin;
+    const origin=publicOrigin(request);
     const params=new URLSearchParams();
     params.set("mode","payment"); params.set("success_url",`${origin}/booking-confirmed?session_id={CHECKOUT_SESSION_ID}`); params.set("cancel_url",`${origin}/?payment=cancelled&draft=${encodeURIComponent(body.draftId)}#book`);
     params.set("customer_email",body.data.email); params.set("client_reference_id",bookingId);
