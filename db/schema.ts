@@ -14,6 +14,8 @@ export const bookings = sqliteTable("bookings", {
   city: text("city"),
   state: text("state"),
   zip: text("zip"),
+  deliveryMiles: real("delivery_miles"),
+  deliveryFee: real("delivery_fee"),
   floor: text("floor"),
   elevator: text("elevator"),
   customerName: text("customer_name").notNull(),
