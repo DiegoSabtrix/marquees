@@ -30,7 +30,11 @@ async function connect(): Promise<Database> {
     const { default: postgres } = await import("postgres");
     const client = postgres(connectionString, { ssl:"require", max:4, prepare:false, connect_timeout:8, idle_timeout:20 });
     const statements = [
-      `CREATE TABLE IF NOT EXISTS bookings (id text PRIMARY KEY, created_at text NOT NULL, event_date text NOT NULL, start_time text NOT NULL, end_time text NOT NULL, phrase text NOT NULL, service text NOT NULL, fulfillment text NOT NULL, zip text, floor text, elevator text, customer_name text NOT NULL, email text NOT NULL, phone text, event_type text, venue text, display_location text, notes text, total double precision NOT NULL, amount_paid double precision NOT NULL DEFAULT 0, payment_status text NOT NULL DEFAULT 'Unpaid', status text NOT NULL DEFAULT 'New request', letter_count integer NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS bookings (id text PRIMARY KEY, created_at text NOT NULL, event_date text NOT NULL, start_time text NOT NULL, end_time text NOT NULL, phrase text NOT NULL, service text NOT NULL, fulfillment text NOT NULL, address text, address_2 text, city text, state text, zip text, floor text, elevator text, customer_name text NOT NULL, email text NOT NULL, phone text, event_type text, venue text, display_location text, notes text, total double precision NOT NULL, amount_paid double precision NOT NULL DEFAULT 0, payment_status text NOT NULL DEFAULT 'Unpaid', status text NOT NULL DEFAULT 'New request', letter_count integer NOT NULL)`,
+      `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS address text`,
+      `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS address_2 text`,
+      `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS city text`,
+      `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS state text`,
       `CREATE TABLE IF NOT EXISTS stripe_settings (id text PRIMARY KEY, active_mode text NOT NULL DEFAULT 'test', test_publishable_key text, test_secret_key_encrypted text, test_webhook_secret_encrypted text, live_publishable_key text, live_secret_key_encrypted text, live_webhook_secret_encrypted text, updated_at text NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS booking_drafts (id text PRIMARY KEY, created_at text NOT NULL, updated_at text NOT NULL, current_step integer NOT NULL DEFAULT 1, status text NOT NULL DEFAULT 'In progress', email text, customer_name text, total double precision NOT NULL DEFAULT 0, data text NOT NULL, booking_id text)`,
       `CREATE TABLE IF NOT EXISTS payment_attempts (id text PRIMARY KEY, booking_id text NOT NULL, draft_id text, stripe_session_id text, mode text NOT NULL, amount double precision NOT NULL, status text NOT NULL, error text, created_at text NOT NULL, updated_at text NOT NULL)`,
@@ -90,13 +94,16 @@ export async function getDraft(id:string) {
 export async function createPendingBooking(data:Record<string,any>, draftId:string) {
   const existingDraft = await getDraft(draftId);
   if (existingDraft?.booking_id) return String(existingDraft.booking_id);
+  if (data.fulfillment === "delivery" && (!String(data.address||"").trim() || !String(data.city||"").trim() || data.state !== "GA" || !/^\d{5}$/.test(String(data.zip||"")))) {
+    throw new Error("A complete Georgia delivery address is required before checkout.");
+  }
   const phrase = String(data.phrase || "").toUpperCase().replace(/[^A-Z ]/g, "").trim();
   const letters = phrase.replaceAll(" ", "");
   const subtotal = letters.length * 55;
   const rental = subtotal - (letters.length >= 4 ? subtotal * .1 : 0);
   const total = rental + (data.fulfillment === "delivery" ? 75 : 0) + (data.fulfillment === "delivery" && data.floor === "no" && data.elevator === "yes" ? 25 : 0);
   const id = `MLE-${new Date().getFullYear()}-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
-  await execute(`INSERT INTO bookings (id,created_at,event_date,start_time,end_time,phrase,service,fulfillment,zip,floor,elevator,customer_name,email,phone,event_type,venue,display_location,notes,total,amount_paid,payment_status,status,letter_count) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [id,new Date().toISOString(),data.eventDate,data.startTime||"",data.endTime||"",phrase,`${letters.length} × 4-ft marquee letters`,data.fulfillment||"pickup",data.zip||null,data.floor||null,data.elevator||null,data.customerName,data.email,data.phone||null,data.eventType||null,data.venue||null,data.displayLocation||null,data.notes||null,total,0,"Pending","Awaiting payment",letters.length]);
+  await execute(`INSERT INTO bookings (id,created_at,event_date,start_time,end_time,phrase,service,fulfillment,address,address_2,city,state,zip,floor,elevator,customer_name,email,phone,event_type,venue,display_location,notes,total,amount_paid,payment_status,status,letter_count) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [id,new Date().toISOString(),data.eventDate,data.startTime||"",data.endTime||"",phrase,`${letters.length} × 4-ft marquee letters`,data.fulfillment||"pickup",data.address||null,data.address2||null,data.city||null,data.state||null,data.zip||null,data.floor||null,data.elevator||null,data.customerName,data.email,data.phone||null,data.eventType||null,data.venue||null,data.displayLocation||null,data.notes||null,total,0,"Pending","Awaiting payment",letters.length]);
   await execute(`UPDATE booking_drafts SET booking_id=?, status=?, updated_at=? WHERE id=?`, [id,"Checkout started",new Date().toISOString(),draftId]);
   return id;
 }
