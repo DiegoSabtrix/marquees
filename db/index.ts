@@ -22,6 +22,8 @@ async function getPostgresDb(databaseUrl: string) {
       city text,
       state text,
       zip text,
+      delivery_miles double precision,
+      delivery_fee double precision,
       floor text,
       elevator text,
       customer_name text NOT NULL,
@@ -52,6 +54,8 @@ async function getPostgresDb(databaseUrl: string) {
     ALTER TABLE bookings ADD COLUMN IF NOT EXISTS address_2 text;
     ALTER TABLE bookings ADD COLUMN IF NOT EXISTS city text;
     ALTER TABLE bookings ADD COLUMN IF NOT EXISTS state text;
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_miles double precision;
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_fee double precision;
   `);
   postgresDb = postgresDrizzle(client) as unknown;
   return postgresDb;
