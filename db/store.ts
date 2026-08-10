@@ -4,9 +4,13 @@ type Database = { kind:"postgres"; client:any } | { kind:"d1"; client:any };
 let databasePromise: Promise<Database> | null = null;
 
 function databaseUrl() {
-  const normalize=(value:string)=>value.trim().replace(/^DATABASE_(?:PUBLIC_)?URL\s*=\s*/i,"").replace(/^['"]|['"]$/g,"");
-  if (process.env.DATABASE_URL) return normalize(process.env.DATABASE_URL);
-  if (process.env.DATABASE_PUBLIC_URL) return normalize(process.env.DATABASE_PUBLIC_URL);
+  const normalize=(value:string)=>{
+    const trimmed=value.trim().replace(/^['"]|['"]$/g,"");
+    const protocol=Math.max(trimmed.indexOf("postgresql://"),trimmed.indexOf("postgres://"));
+    return protocol>=0?trimmed.slice(protocol):trimmed.replace(/^DATABASE_(?:PUBLIC_)?URL\s*=\s*/i,"");
+  };
+  const candidates=[process.env.DATABASE_URL,process.env.DATABASE_PUBLIC_URL,...Object.values(process.env)];
+  for(const candidate of candidates) if(candidate&&/(?:postgresql|postgres):\/\//.test(candidate)) return normalize(candidate);
   if (process.env.PGHOST && process.env.PGUSER && process.env.PGPASSWORD && process.env.PGDATABASE) {
     const user=encodeURIComponent(process.env.PGUSER), password=encodeURIComponent(process.env.PGPASSWORD);
     const port=process.env.PGPORT || "5432";
@@ -36,6 +40,7 @@ async function connect(): Promise<Database> {
     for (const statement of statements) await client.unsafe(statement);
     return { kind:"postgres", client };
   }
+  if (Object.keys(process.env).some(key=>key.startsWith("RAILWAY_"))) throw new Error("Railway PostgreSQL reference is missing or unresolved");
   const { env } = await import("cloudflare:workers");
   if (!env.DB) throw new Error("Database binding is unavailable");
   await env.DB.batch([
