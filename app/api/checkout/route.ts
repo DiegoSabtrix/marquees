@@ -22,8 +22,9 @@ export async function POST(request:Request) {
     const encrypted=settings[`${mode}_secret_key_encrypted`] as string|undefined;
     if(!encrypted) return Response.json({error:`Stripe ${mode} mode is not configured yet. Please contact us at 404-671-3228.`},{status:503});
     const secret=await decryptStripeSecret(encrypted);
-    const bookingId=await createPendingBooking(body.data,body.draftId);
-    const amount=Math.round(Number(body.total)*100);
+    const booking=await createPendingBooking(body.data,body.draftId);
+    const bookingId=booking.id;
+    const amount=Math.round(booking.total*100);
     if(!Number.isFinite(amount)||amount<50) return Response.json({error:"Invalid payment amount"},{status:400});
     const attemptId=await createPaymentAttempt({bookingId,draftId:body.draftId,mode,amount:amount/100,status:"Creating checkout"});
     const origin=publicOrigin(request);
@@ -44,6 +45,7 @@ export async function POST(request:Request) {
     console.error("Checkout failed",error);
     const message=error instanceof Error?error.message:"";
     const configurationError=/PostgreSQL|DATABASE_URL|not configured|Database binding/i.test(message);
-    return Response.json({error:configurationError?"Online booking is temporarily unavailable while payment setup is completed. Please call or text 404-671-3228.":"We could not start secure payment. Please try again or call 404-671-3228."},{status:503});
+    const deliveryError=/delivery address|driving miles|driving distance|route|address could not|could not find that address/i.test(message);
+    return Response.json({error:configurationError?"Online booking is temporarily unavailable while payment setup is completed. Please call or text 404-671-3228.":deliveryError?message:"We could not start secure payment. Please try again or call 404-671-3228."},{status:configurationError?503:400});
   }
 }
