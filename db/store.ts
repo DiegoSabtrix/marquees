@@ -1,5 +1,5 @@
 type Row = Record<string, unknown>;
-type Database = { kind: "postgres"; client: any };
+type Database = { kind: "postgres"; client: any } | { kind: "d1" };
 
 let databasePromise: Promise<Database> | null = null;
 
@@ -69,9 +69,12 @@ async function connect(): Promise<Database> {
     for (const statement of statements) await client.unsafe(statement);
     return { kind: "postgres", client };
   }
-  throw new Error(
-    "PostgreSQL is not configured. Set DATABASE_URL to the Railway Postgres service reference.",
-  );
+  // Sites provides a D1 binding instead of a PostgreSQL connection string.
+  // Keep this import conditional so Railway's Node runtime never evaluates the
+  // Cloudflare-only module when DATABASE_URL is configured.
+  const { d1Query } = await import("./d1");
+  await d1Query(`SELECT 1 AS ready`);
+  return { kind: "d1" };
 }
 
 async function db() {
@@ -92,7 +95,7 @@ export function databaseConfig() {
         ? "DATABASE_PUBLIC_URL"
         : process.env.PGHOST
           ? "PG variables"
-          : "Not configured",
+          : "Sites D1",
   };
 }
 
@@ -101,12 +104,18 @@ export async function query<T extends Row = Row>(
   values: unknown[] = [],
 ): Promise<T[]> {
   const database = await db();
-  return (await database.client.unsafe(postgresSql(sql), values)) as T[];
+  if (database.kind === "postgres")
+    return (await database.client.unsafe(postgresSql(sql), values)) as T[];
+  const { d1Query } = await import("./d1");
+  return d1Query<T>(sql, values);
 }
 
 export async function execute(sql: string, values: unknown[] = []) {
   const database = await db();
-  return database.client.unsafe(postgresSql(sql), values);
+  if (database.kind === "postgres")
+    return database.client.unsafe(postgresSql(sql), values);
+  const { d1Execute } = await import("./d1");
+  return d1Execute(sql, values);
 }
 
 export async function listAdminRecords() {

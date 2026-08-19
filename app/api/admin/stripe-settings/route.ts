@@ -8,10 +8,12 @@ const field=(mode:Mode,name:string)=>`${mode}_${name}`;
 export async function GET(request:Request) {
   if(!await validAdminToken(cookieToken(request))) return Response.json({error:"Unauthorized"},{status:401});
   const settings=await getStripeSettings();
-  const mode=(settings?.active_mode||"test") as Mode;
+  const requestedMode=new URL(request.url).searchParams.get("mode");
+  const activeMode=(settings?.active_mode||"test") as Mode;
+  const mode=(requestedMode==="test"||requestedMode==="live"?requestedMode:activeMode) as Mode;
   const secret=await secretSummary((settings?.[field(mode,"secret_key_encrypted")] as string)||null);
   const webhook=await secretSummary((settings?.[field(mode,"webhook_secret_encrypted")] as string)||null);
-  return Response.json({mode,publishableKey:settings?.[field(mode,"publishable_key")]||"",secret,webhook,updatedAt:settings?.updated_at||null});
+  return Response.json({mode,activeMode,publishableKey:settings?.[field(mode,"publishable_key")]||"",secret,webhook,updatedAt:settings?.updated_at||null});
 }
 
 export async function PUT(request:Request) {
