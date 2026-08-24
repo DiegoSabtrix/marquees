@@ -323,23 +323,42 @@ export async function markPayment(
     `SELECT booking_id,draft_id FROM payment_attempts WHERE stripe_session_id=?`,
     [sessionId],
   );
-  if (!attempt) return null;
+  if (!attempt) return { bookingId: null, transitionedToPaid: false };
   await execute(
     `UPDATE payment_attempts SET status=?, error=?, updated_at=? WHERE stripe_session_id=?`,
     [status, error, now, sessionId],
   );
   if (status === "Paid") {
-    await execute(
-      `UPDATE bookings SET payment_status='Paid', amount_paid=?, status='New request' WHERE id=?`,
+    const result = await execute(
+      `UPDATE bookings SET payment_status='Paid', amount_paid=?, status='New request' WHERE id=? AND payment_status<>'Paid'`,
       [paidAmount, attempt.booking_id],
     );
+    const transitionedToPaid = Number(
+      result?.count ?? result?.meta?.changes ?? result?.changes ?? 0,
+    ) > 0;
     if (attempt.draft_id)
       await execute(
         `UPDATE booking_drafts SET status='Completed', updated_at=? WHERE id=?`,
         [now, attempt.draft_id],
       );
+    return { bookingId: String(attempt.booking_id), transitionedToPaid };
   }
-  return String(attempt.booking_id);
+  return { bookingId: String(attempt.booking_id), transitionedToPaid: false };
+}
+
+export async function getBookingForCrm(id: string) {
+  const booking = (
+    await query(`SELECT * FROM bookings WHERE id=?`, [id])
+  )[0];
+  if (!booking) return null;
+  const draft = (
+    await query(`SELECT data FROM booking_drafts WHERE booking_id=?`, [id])
+  )[0];
+  let draftData: Record<string, unknown> = {};
+  try {
+    draftData = draft?.data ? JSON.parse(String(draft.data)) : {};
+  } catch {}
+  return { ...booking, ...draftData };
 }
 
 export async function updateBookingStatus(id: string, status: string) {

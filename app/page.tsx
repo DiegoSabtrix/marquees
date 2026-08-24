@@ -1,5 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+declare global {
+  interface Window {
+    fbq?: (...args: unknown[]) => void;
+  }
+}
 type Lang = "en" | "es";
 type Step = 1 | 2 | 3 | 4 | 5;
 const C = {
@@ -153,6 +158,7 @@ export default function Home() {
     [saving, setSaving] = useState(false),
     [submitError, setSubmitError] = useState(""),
     [draftId, setDraftId] = useState(""),
+    [attribution, setAttribution] = useState<Record<string, string>>({}),
     [termsAccepted, setTermsAccepted] = useState(false);
   const t = C[lang];
   const r = useMemo(() => {
@@ -219,12 +225,37 @@ export default function Home() {
     venue,
     displayLocation,
     notes,
+    attribution,
   });
   const makeDraftId = () =>
     `DRAFT-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   useEffect(() => {
     const saved = localStorage.getItem("marquees-draft-id");
     if (saved) setDraftId(saved);
+    const storedAttribution = sessionStorage.getItem("marquees-attribution");
+    if (storedAttribution) {
+      try {
+        setAttribution(JSON.parse(storedAttribution));
+        return;
+      } catch {}
+    }
+    const params = new URLSearchParams(location.search);
+    const captured = [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_content",
+      "utm_term",
+      "fbclid",
+    ].reduce<Record<string, string>>((result, key) => {
+      const value = params.get(key);
+      if (value) result[key] = value;
+      return result;
+    }, {});
+    captured.landing_page = location.href;
+    if (document.referrer) captured.referrer = document.referrer;
+    sessionStorage.setItem("marquees-attribution", JSON.stringify(captured));
+    setAttribution(captured);
   }, []);
   useEffect(() => {
     if (step > 1)
@@ -307,6 +338,12 @@ export default function Home() {
           result.error ||
             "We could not start secure payment. Please try again or call 404-671-3228.",
         );
+      window.fbq?.("track", "InitiateCheckout", {
+        value: total,
+        currency: "USD",
+        content_name: `${r.valid} marquee letter rental`,
+        content_category: "Event rental booking",
+      });
       localStorage.removeItem("marquees-booking-progress");
       localStorage.removeItem("marquees-draft-id");
       location.href = result.url;

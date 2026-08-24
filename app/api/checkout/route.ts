@@ -1,5 +1,6 @@
 import { createPendingBooking, createPaymentAttempt, attachStripeSession, failPaymentAttempt, getStripeSettings } from "../../../db/store";
 import { decryptStripeSecret } from "../../../lib/stripe-settings";
+import { notifyCrm } from "../../../lib/crm-webhook";
 
 function publicOrigin(request:Request) {
   const configured=process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/,"");
@@ -40,6 +41,7 @@ export async function POST(request:Request) {
     const result=(stripeText?JSON.parse(stripeText):{}) as {id?:string;url?:string;error?:{message?:string}};
     if(!stripe.ok||!result.id||!result.url) { const message=result.error?.message||"Stripe could not start checkout"; await failPaymentAttempt(attemptId,message); return Response.json({error:message},{status:502}); }
     await attachStripeSession(attemptId,result.id);
+    await notifyCrm({stage:"checkout_started",eventId:`checkout:${bookingId}`,draftId:body.draftId,bookingId,data:body.data,total:booking.total,paymentStatus:"Awaiting payment"});
     return Response.json({url:result.url});
   } catch(error) {
     console.error("Checkout failed",error);

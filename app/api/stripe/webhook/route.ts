@@ -1,5 +1,6 @@
-import { getStripeSettings, markPayment } from "../../../../db/store";
+import { getBookingForCrm, getStripeSettings, markPayment } from "../../../../db/store";
 import { decryptStripeSecret, safeSecretMatch } from "../../../../lib/stripe-settings";
+import { notifyCrm } from "../../../../lib/crm-webhook";
 
 async function hmac(secret:string,payload:string) {
   const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
@@ -17,7 +18,14 @@ export async function POST(request:Request) {
   for(const encrypted of encryptedSecrets) { const secret=await decryptStripeSecret(encrypted); const expected=await hmac(secret,`${parts.t}.${raw}`); if(safeSecretMatch(expected,parts.v1)) { valid=true; break; } }
   if(!valid||Math.abs(Date.now()/1000-Number(parts.t))>300) return new Response("Invalid signature",{status:400});
   const event=JSON.parse(raw) as {type:string;data:{object:{id:string;payment_status?:string;amount_total?:number}}};
-  if(event.type==="checkout.session.completed"&&event.data.object.payment_status==="paid") await markPayment(event.data.object.id,"Paid",(event.data.object.amount_total||0)/100);
+  if(event.type==="checkout.session.completed"&&event.data.object.payment_status==="paid") {
+    const amount=(event.data.object.amount_total||0)/100;
+    const payment=await markPayment(event.data.object.id,"Paid",amount);
+    if(payment.transitionedToPaid&&payment.bookingId) {
+      const booking=await getBookingForCrm(payment.bookingId);
+      if(booking) await notifyCrm({stage:"booking_paid",eventId:`paid:${payment.bookingId}`,bookingId:payment.bookingId,data:booking,total:amount,paymentStatus:"Paid"});
+    }
+  }
   if(event.type==="checkout.session.expired") await markPayment(event.data.object.id,"Expired",0,"Checkout expired");
   return Response.json({received:true});
 }
