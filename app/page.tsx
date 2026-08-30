@@ -508,6 +508,17 @@ export default function Home() {
         </div>
       </section>
       <section className="book" id="book">
+        <div className="bookingIntro">
+          <div>
+            <p className="eyebrow">ONLINE BOOKING</p>
+            <h2>Build your reservation</h2>
+            <p>Answer a few simple questions and see your price update instantly.</p>
+          </div>
+          <div className="bookingTrust">
+            <span>✓ About 2 minutes</span>
+            <span>🔒 Secure checkout</span>
+          </div>
+        </div>
         <div className="progress">
           {["LETTERS", "DATE", "DELIVERY", "YOUR EVENT", "REVIEW"].map(
             (x, i) => (
@@ -525,7 +536,10 @@ export default function Home() {
         </div>
         <div className="panel">
           <div className="form">
-            <p className="eyebrow">STEP 0{step}</p>
+            <div className="stepContext">
+              <p className="eyebrow">STEP 0{step} OF 05</p>
+              <span>Your progress is saved automatically</span>
+            </div>
             {step === 1 && (
               <>
                 <h2>{t.q}</h2>
@@ -826,28 +840,35 @@ export default function Home() {
             {step === 4 && (
               <>
                 <h2>About you & your event</h2>
+                <p>We’ll use these details only to prepare and confirm your reservation.</p>
                 <div className="grid">
                   <label>
                     Full name
                     <input
+                      autoComplete="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
+                      placeholder="Your first and last name"
                     />
                   </label>
                   <label>
                     Email
                     <input
                       type="email"
+                      autoComplete="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
                     />
                   </label>
                   <label>
                     Mobile phone
                     <input
                       type="tel"
+                      autoComplete="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
+                      placeholder="(404) 555-0123"
                     />
                   </label>
                   <label>
@@ -866,6 +887,7 @@ export default function Home() {
                     <input
                       value={venue}
                       onChange={(e) => setVenue(e.target.value)}
+                      placeholder="Venue or location name"
                     />
                   </label>
                   <label>
@@ -887,8 +909,10 @@ export default function Home() {
                     rows={4}
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Setup notes, access instructions or special requests (optional)"
                   />
                 </label>
+                <p className="privacyHint">🔒 Your contact details are used only for this booking.</p>
               </>
             )}
             {step === 5 && (
@@ -978,7 +1002,13 @@ export default function Home() {
             </div>
           </div>
           <aside>
-            <p className="eyebrow">YOUR MARQUEE</p>
+            <div className="summaryHeading">
+              <div>
+                <p className="eyebrow">YOUR MARQUEE</p>
+                <span>Live reservation summary</span>
+              </div>
+              <b>Updates live</b>
+            </div>
             <div className="preview">
               {r.letters.map((x, i) => (
                 <i key={i}>{x}</i>
