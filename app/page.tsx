@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 declare global {
   interface Window {
     fbq?: (...args: unknown[]) => void;
+    gtag?: (...args: unknown[]) => void;
   }
 }
 type Lang = "en" | "es";
@@ -229,6 +230,8 @@ export default function Home() {
   });
   const makeDraftId = () =>
     `DRAFT-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const track = (event: string, parameters: Record<string, unknown> = {}) =>
+    window.gtag?.("event", event, parameters);
   useEffect(() => {
     const saved = localStorage.getItem("marquees-draft-id");
     if (saved) setDraftId(saved);
@@ -256,6 +259,22 @@ export default function Home() {
     if (document.referrer) captured.referrer = document.referrer;
     sessionStorage.setItem("marquees-attribution", JSON.stringify(captured));
     setAttribution(captured);
+  }, []);
+  useEffect(() => {
+    const trackIntentClick = (event: MouseEvent) => {
+      const link = (event.target as Element | null)?.closest("a");
+      if (!link) return;
+      const href = link.getAttribute("href") || "";
+      if (href === "#book")
+        track("select_content", {
+          content_type: "booking_cta",
+          item_id: "marquee_booking",
+        });
+      if (href.startsWith("tel:"))
+        track("contact", { method: "phone", link_location: "website" });
+    };
+    document.addEventListener("click", trackIntentClick);
+    return () => document.removeEventListener("click", trackIntentClick);
   }, []);
   useEffect(() => {
     if (step > 1)
@@ -303,6 +322,35 @@ export default function Home() {
     const next = (step + 1) as Step;
     try {
       await persistDraft(next);
+      track("booking_step_complete", {
+        step_number: step,
+        next_step_number: next,
+        fulfillment,
+      });
+      if (step === 1)
+        track("view_item", {
+          currency: "USD",
+          value: total,
+          items: [{ item_id: "marquee_letters", item_name: "Marquee letter rental" }],
+        });
+      if (step === 4) {
+        const leadKey = `lead-tracked:${draftId || "current"}`;
+        if (!sessionStorage.getItem(leadKey)) {
+          track("generate_lead", {
+            currency: "USD",
+            value: total,
+            lead_source: "booking_form",
+            event_type: eventType,
+            fulfillment,
+          });
+          window.fbq?.("track", "Lead", {
+            value: total,
+            currency: "USD",
+            content_category: "Event rental booking",
+          });
+          sessionStorage.setItem(leadKey, "1");
+        }
+      }
     } catch (error) {
       setSubmitError(
         error instanceof Error
@@ -336,13 +384,19 @@ export default function Home() {
       if (!response.ok || !result.url)
         throw new Error(
           result.error ||
-            "We could not start secure payment. Please try again or call 404-671-3228.",
+            "We could not start secure payment. Please try again or call +1 404-671-3228.",
         );
       window.fbq?.("track", "InitiateCheckout", {
         value: total,
         currency: "USD",
         content_name: `${r.valid} marquee letter rental`,
         content_category: "Event rental booking",
+      });
+      track("begin_checkout", {
+        currency: "USD",
+        value: total,
+        items: [{ item_id: "marquee_letters", item_name: "Marquee letter rental" }],
+        fulfillment,
       });
       localStorage.removeItem("marquees-booking-progress");
       localStorage.removeItem("marquees-draft-id");
@@ -370,7 +424,7 @@ export default function Home() {
           <a href="#faq">FAQs</a>
         </div>
         <a className="phone" href="tel:+14046713228">
-          404-671-3228
+          +1 404-671-3228
         </a>
         <button
           className="lang"
@@ -1152,7 +1206,7 @@ export default function Home() {
         <p>© 2026 MARQuees Lights and Events. All Rights Reserved.</p>
       </footer>
       <a className="mobile" href="#book">
-        {t.build} · 404-671-3228
+        {t.build} · +1 404-671-3228
       </a>
     </main>
   );

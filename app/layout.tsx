@@ -5,14 +5,22 @@ export const metadata: Metadata = {
   title: "MARQuees Lights and Events",
   description:
     "4-foot marquee letter rentals in Lawrenceville, Georgia, with local pickup and flat-rate delivery. Build your word, check availability and reserve online.",
-  other: {
-    "codex-preview": "development",
-  },
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-WN549WV4LJ"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+window.gtag = gtag;
+gtag('js', new Date());
+gtag('config', 'G-WN549WV4LJ');`}
+        </Script>
         <script
           id="meta-pixel"
           dangerouslySetInnerHTML={{
