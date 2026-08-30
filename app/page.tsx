@@ -7,7 +7,7 @@ declare global {
   }
 }
 type Lang = "en" | "es";
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3;
 const C = {
   en: {
     hero: "LIGHT UP THE MOMENT.",
@@ -197,12 +197,9 @@ export default function Home() {
     step === 1
       ? !!r.letters.length && !r.shortage
       : step === 2
-        ? !!date && advanceOk
-        : step === 3
-          ? fulfillment === "pickup" || deliveryAddressComplete
-          : step === 4
-            ? !!name && !!email
-            : true;
+        ? !!date && advanceOk && /^\d{5}$/.test(zip) &&
+          (fulfillment === "pickup" || r.sub >= 200)
+        : true;
   const bookingData = () => ({
     phrase: r.valid,
     eventDate: date,
@@ -333,24 +330,6 @@ export default function Home() {
           value: total,
           items: [{ item_id: "marquee_letters", item_name: "Marquee letter rental" }],
         });
-      if (step === 4) {
-        const leadKey = `lead-tracked:${draftId || "current"}`;
-        if (!sessionStorage.getItem(leadKey)) {
-          track("generate_lead", {
-            currency: "USD",
-            value: total,
-            lead_source: "booking_form",
-            event_type: eventType,
-            fulfillment,
-          });
-          window.fbq?.("track", "Lead", {
-            value: total,
-            currency: "USD",
-            content_category: "Event rental booking",
-          });
-          sessionStorage.setItem(leadKey, "1");
-        }
-      }
     } catch (error) {
       setSubmitError(
         error instanceof Error
@@ -398,6 +377,21 @@ export default function Home() {
         items: [{ item_id: "marquee_letters", item_name: "Marquee letter rental" }],
         fulfillment,
       });
+      const leadKey = `lead-tracked:${id}`;
+      if (!sessionStorage.getItem(leadKey)) {
+        track("generate_lead", {
+          currency: "USD",
+          value: total,
+          lead_source: "booking_form",
+          fulfillment,
+        });
+        window.fbq?.("track", "Lead", {
+          value: total,
+          currency: "USD",
+          content_category: "Event rental booking",
+        });
+        sessionStorage.setItem(leadKey, "1");
+      }
       localStorage.removeItem("marquees-booking-progress");
       localStorage.removeItem("marquees-draft-id");
       location.href = result.url;
@@ -507,558 +501,90 @@ export default function Home() {
           ))}
         </div>
       </section>
-      <section className="book" id="book">
-        <div className="bookingIntro">
-          <div>
-            <p className="eyebrow">ONLINE BOOKING</p>
-            <h2>Build your reservation</h2>
-            <p>Answer a few simple questions and see your price update instantly.</p>
-          </div>
-          <div className="bookingTrust">
-            <span>✓ About 2 minutes</span>
-            <span>🔒 Secure checkout</span>
-          </div>
+      <section className="book simpleBooking" id="book">
+        <div className="simpleIntro">
+          <p className="eyebrow">ONLINE BOOKING</p>
+          <h2>Book in under 2 minutes.</h2>
+          <p>You’ll review everything before paying.</p>
         </div>
-        <div className="progress">
-          {["LETTERS", "DATE", "DELIVERY", "YOUR EVENT", "REVIEW"].map(
-            (x, i) => (
-              <span
-                key={x}
-                className={
-                  step === i + 1 ? "active" : step > i + 1 ? "done" : ""
-                }
-              >
-                <b>{i + 1}</b>
-                {x}
-              </span>
-            ),
-          )}
+        <div className="simpleProgress" aria-label={`Step ${step} of 3`}>
+          {["What do you need?", "When & where?", "Contact & payment"].map((x, i) => (
+            <div key={x} className={step === i + 1 ? "active" : step > i + 1 ? "done" : ""}>
+              <b>{step > i + 1 ? "✓" : i + 1}</b><span>{x}</span>
+            </div>
+          ))}
         </div>
-        <div className="panel">
-          <div className="form">
-            <div className="stepContext">
-              <p className="eyebrow">STEP 0{step} OF 05</p>
-              <span>Your progress is saved automatically</span>
-            </div>
-            {step === 1 && (
-              <>
-                <h2>{t.q}</h2>
-                <p>{t.help}</p>
-                <label>
-                  Your word or phrase
-                  <input
-                    className="word"
-                    value={phrase}
-                    onChange={(e) => setPhrase(e.target.value.toUpperCase())}
-                    maxLength={24}
-                  />
+        <div className="simplePanel">
+          <div className="simpleForm">
+            {step === 1 && <>
+              <h2>What do you need?</h2>
+              <p>Enter a name, word or number. Your price updates instantly.</p>
+              <label>Your letters or phrase
+                <input className="word" value={phrase} onChange={e=>setPhrase(e.target.value.toUpperCase())} maxLength={24} placeholder="LOVE, HAPPY 30, EMMA…" autoFocus />
+              </label>
+              {r.invalid&&<p className="notice">Letters, numbers and spaces work best. Contact us for special characters.</p>}
+              {r.shortage&&<p className="error">We only have two of each letter. Try another phrase or contact us.</p>}
+              <div className="instantPrice"><span>{r.letters.length} letters · $55 each{r.disc>0?" · 10% discount":""}</span><b>{money(r.rental)}</b></div>
+            </>}
+
+            {step === 2 && <>
+              <h2>When is your event?</h2>
+              <p>Select the date, approximate start time and how you’ll receive the letters.</p>
+              <div className="simpleGrid">
+                <label>Event date
+                  <input type="date" value={date} min={new Date(Date.now()+86400000).toISOString().slice(0,10)} onChange={e=>setDate(e.target.value)} />
                 </label>
-                {r.invalid && (
-                  <p className="notice">
-                    Need a special character? Contact us and we'll check
-                    availability.
-                  </p>
-                )}
-                {r.shortage && (
-                  <p className="error">
-                    We have 2 of each letter. Your selection requires{" "}
-                    {r.shortage[1]} {r.shortage[0]}'s. Try another phrase or
-                    contact us.
-                  </p>
-                )}
-                <p className="hint">
-                  <b>2 individual physical units</b> of every A–Z letter • 4 ft
-                  tall
-                </p>
-              </>
-            )}
-            {step === 2 && (
-              <>
-                <h2>Choose your event date & time</h2>
-                <p>Three simple choices. No complicated calendar widget.</p>
-                <div className="dateFlow">
-                  <div className="dateBlock">
-                    <b>1. EVENT DATE</b>
-                    <input
-                      aria-label="Event date"
-                      type="date"
-                      value={date}
-                      min={new Date(Date.now() + 86400000)
-                        .toISOString()
-                        .slice(0, 10)}
-                      onChange={(e) => setDate(e.target.value)}
-                    />
-                    <small>
-                      {date
-                        ? new Date(`${date}T12:00:00`).toLocaleDateString(
-                            "en-US",
-                            {
-                              weekday: "long",
-                              month: "long",
-                              day: "numeric",
-                              year: "numeric",
-                            },
-                          )
-                        : "Select a date at least 24 hours from now"}
-                    </small>
-                  </div>
-                  <div className="dateBlock">
-                    <b>2. START TIME</b>
-                    <div className="timePills">
-                      {[
-                        "10:00",
-                        "12:00",
-                        "14:00",
-                        "16:00",
-                        "18:00",
-                        "20:00",
-                      ].map((x) => (
-                        <button
-                          key={x}
-                          className={start === x ? "selected" : ""}
-                          onClick={() => setStart(x)}
-                        >
-                          {new Date(`2000-01-01T${x}`).toLocaleTimeString(
-                            "en-US",
-                            { hour: "numeric", minute: "2-digit" },
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="dateBlock">
-                    <b>3. EVENT LENGTH</b>
-                    <div className="timePills">
-                      {[2, 4, 6, 8].map((h) => (
-                        <button
-                          key={h}
-                          className={
-                            (Number(end.slice(0, 2)) -
-                              Number(start.slice(0, 2)) +
-                              24) %
-                              24 ===
-                            h
-                              ? "selected"
-                              : ""
-                          }
-                          onClick={() =>
-                            setEnd(
-                              `${String((Number(start.slice(0, 2)) + h) % 24).padStart(2, "0")}:00`,
-                            )
-                          }
-                        >
-                          {h} HOURS
-                        </button>
-                      ))}
-                    </div>
-                    <p className="timeSummary">
-                      {date ? (
-                        <>
-                          Your event:{" "}
-                          <b>
-                            {new Date(`${date}T12:00:00`).toLocaleDateString(
-                              "en-US",
-                              {
-                                weekday: "short",
-                                month: "short",
-                                day: "numeric",
-                              },
-                            )}
-                          </b>{" "}
-                          from{" "}
-                          <b>
-                            {new Date(`2000-01-01T${start}`).toLocaleTimeString(
-                              "en-US",
-                              { hour: "numeric", minute: "2-digit" },
-                            )}
-                          </b>{" "}
-                          to{" "}
-                          <b>
-                            {new Date(`2000-01-01T${end}`).toLocaleTimeString(
-                              "en-US",
-                              { hour: "numeric", minute: "2-digit" },
-                            )}
-                          </b>
-                        </>
-                      ) : (
-                        "Choose a date to continue"
-                      )}
-                    </p>
-                  </div>
-                </div>
-                {!advanceOk && (
-                  <p className="error">
-                    <b>Need it sooner?</b> Call or text{" "}
-                    <a href="tel:+14046713228">+1 404-671-3228</a> for
-                    availability.
-                  </p>
-                )}
-                <p className="success">
-                  ✓ Phrase passes the physical inventory check. Live booking
-                  conflicts will be checked before payment.
-                </p>
-              </>
-            )}
-            {step === 3 && (
-              <>
-                <h2>Pickup or delivery?</h2>
-                <p className="stepIntro">
-                  Choose how you would like to receive your marquee letters.
-                </p>
-                <div className="choices fulfillmentChoices">
-                  <button
-                    className={fulfillment === "pickup" ? "selected" : ""}
-                    onClick={() => setFulfillment("pickup")}
-                  >
-                    <b>FREE PICKUP</b>
-                    <small>Near Lawrenceville, Georgia</small>
-                  </button>
-                  <button
-                    disabled={r.sub < 200}
-                    className={fulfillment === "delivery" ? "selected" : ""}
-                    onClick={() => setFulfillment("delivery")}
-                  >
-                    <b>DELIVERY + SETUP</b>
-                    <small>
-                      {r.sub >= 200
-                        ? "Flat $75 delivery fee"
-                        : "Available for $200+ orders"}
-                    </small>
-                  </button>
-                </div>
-                {fulfillment === "delivery" && (
-                  <div className="deliveryForm">
-                    <div className="formSectionHeader">
-                      <span>01</span>
-                      <div>
-                        <b>Delivery address</b>
-                        <small>Enter the complete delivery address.</small>
-                      </div>
-                    </div>
-                    <div className="deliveryGrid">
-                      <label className="fullField">
-                        Street address
-                        <input
-                          autoComplete="street-address"
-                          value={address}
-                          onChange={(e) => setAddress(e.target.value)}
-                          placeholder="123 Main Street"
-                        />
-                      </label>
-                      <label className="fullField optionalField">
-                        Apartment, suite or unit <small>Optional</small>
-                        <input
-                          autoComplete="address-line2"
-                          value={address2}
-                          onChange={(e) => setAddress2(e.target.value)}
-                          placeholder="Suite 200"
-                        />
-                      </label>
-                      <label>
-                        City
-                        <input
-                          autoComplete="address-level2"
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          placeholder="Lawrenceville"
-                        />
-                      </label>
-                      <label>
-                        State
-                        <select
-                          autoComplete="address-level1"
-                          value={state}
-                          onChange={(e) => setState(e.target.value)}
-                        >
-                          <option value="GA">Georgia</option>
-                        </select>
-                      </label>
-                      <label>
-                        ZIP code
-                        <input
-                          inputMode="numeric"
-                          autoComplete="postal-code"
-                          value={zip}
-                          maxLength={5}
-                          onChange={(e) =>
-                            setZip(
-                              e.target.value.replace(/\D/g, "").slice(0, 5),
-                            )
-                          }
-                          placeholder="30046"
-                        />
-                      </label>
-                    </div>
-                    <div className="serviceAreaNote">
-                      <b>Flat delivery + setup fee</b>
-                      <span>
-                        A fixed $75 delivery fee is added automatically. Our
-                        team will use the address above to coordinate delivery.
-                      </span>
-                    </div>
-                    <div className="formSectionHeader accessHeader">
-                      <span>02</span>
-                      <div>
-                        <b>Setup access</b>
-                        <small>Help our team plan a safe installation.</small>
-                      </div>
-                    </div>
-                    <div className="deliveryGrid accessGrid">
-                      <label>
-                        Is the setup on the ground floor?
-                        <select
-                          value={floor}
-                          onChange={(e) => setFloor(e.target.value)}
-                        >
-                          <option value="yes">Yes, ground floor</option>
-                          <option value="no">No, upper floor</option>
-                        </select>
-                      </label>
-                      {floor === "no" && (
-                        <label>
-                          Is an elevator available?
-                          <select
-                            value={elevator}
-                            onChange={(e) => setElevator(e.target.value)}
-                          >
-                            <option value="yes">Yes (+$25 access fee)</option>
-                            <option value="no">No, stairs only</option>
-                          </select>
-                        </label>
-                      )}
-                    </div>
-                    {floor === "no" && elevator === "no" && (
-                      <p className="notice">
-                        Stair access requires additional labor and staff
-                        approval before the reservation is confirmed.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-            {step === 4 && (
-              <>
-                <h2>About you & your event</h2>
-                <p>We’ll use these details only to prepare and confirm your reservation.</p>
-                <div className="grid">
-                  <label>
-                    Full name
-                    <input
-                      autoComplete="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Your first and last name"
-                    />
-                  </label>
-                  <label>
-                    Email
-                    <input
-                      type="email"
-                      autoComplete="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com"
-                    />
-                  </label>
-                  <label>
-                    Mobile phone
-                    <input
-                      type="tel"
-                      autoComplete="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="(404) 555-0123"
-                    />
-                  </label>
-                  <label>
-                    Event type
-                    <select
-                      value={eventType}
-                      onChange={(e) => setEventType(e.target.value)}
-                    >
-                      {eventTypes.map((x) => (
-                        <option key={x}>{x}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Venue name
-                    <input
-                      value={venue}
-                      onChange={(e) => setVenue(e.target.value)}
-                      placeholder="Venue or location name"
-                    />
-                  </label>
-                  <label>
-                    Display location
-                    <select
-                      value={displayLocation}
-                      onChange={(e) => setDisplayLocation(e.target.value)}
-                    >
-                      <option>Indoor</option>
-                      <option>Outdoor</option>
-                      <option>Covered outdoor</option>
-                      <option>Not sure</option>
-                    </select>
-                  </label>
-                </div>
-                <label>
-                  Anything else we should know?
-                  <textarea
-                    rows={4}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Setup notes, access instructions or special requests (optional)"
-                  />
+                <label>Event ZIP code
+                  <input inputMode="numeric" autoComplete="postal-code" value={zip} maxLength={5} onChange={e=>setZip(e.target.value.replace(/\D/g,"").slice(0,5))} placeholder="30046" />
                 </label>
-                <p className="privacyHint">🔒 Your contact details are used only for this booking.</p>
-              </>
-            )}
-            {step === 5 && (
-              <>
-                <h2>Review & pay securely</h2>
-                <div className="review">
-                  <p>
-                    <span>Marquee</span>
-                    <b>{r.valid || "—"}</b>
-                  </p>
-                  <p>
-                    <span>Event</span>
-                    <b>
-                      {date || "Date not selected"} · {start}–{end}
-                    </b>
-                  </p>
-                  <p>
-                    <span>Fulfillment</span>
-                    <b>
-                      {fulfillment === "pickup"
-                        ? "Free pickup in Lawrenceville"
-                        : `Delivery to ${address}${address2 ? `, ${address2}` : ""}, ${city}, ${state} ${zip}`}
-                    </b>
-                  </p>
-                  <p>
-                    <span>Customer</span>
-                    <b>{name}</b>
-                  </p>
-                  <p>
-                    <span>Amount due</span>
-                    <b>{money(total)}</b>
-                  </p>
-                </div>
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={termsAccepted}
-                    onChange={(e) => setTermsAccepted(e.target.checked)}
-                  />{" "}
-                  I have reviewed and agree to the Rental Terms & Conditions.
-                </label>
-                {submitError && <p className="error">{submitError}</p>}
-                <button
-                  className="btn gold wide"
-                  disabled={saving || !termsAccepted}
-                  onClick={submitBooking}
-                >
-                  {saving
-                    ? "OPENING SECURE CHECKOUT…"
-                    : `PAY ${money(total)} WITH STRIPE →`}
-                </button>
-                <small className="stripe">
-                  Card information is collected securely by Stripe. We never
-                  store card numbers.
-                </small>
-              </>
-            )}
-            {submitError && step < 5 && (
-              <p
-                className={
-                  submitError.includes("saved on this device")
-                    ? "notice"
-                    : "error"
-                }
-              >
-                {submitError}
-              </p>
-            )}
-            <div className="actions">
-              {step > 1 && (
-                <button
-                  className="back"
-                  onClick={() => setStep((step - 1) as Step)}
-                >
-                  ← {t.back}
-                </button>
-              )}
-              {step < 5 && (
-                <button
-                  className="btn dark"
-                  disabled={!canNext || saving}
-                  onClick={goNext}
-                >
-                  {saving ? "SAVING…" : t.next} →
-                </button>
-              )}
-            </div>
-          </div>
-          <aside>
-            <div className="summaryHeading">
-              <div>
-                <p className="eyebrow">YOUR MARQUEE</p>
-                <span>Live reservation summary</span>
               </div>
-              <b>Updates live</b>
-            </div>
-            <div className="preview">
-              {r.letters.map((x, i) => (
-                <i key={i}>{x}</i>
-              ))}
-            </div>
-            <p className="facts">
-              <span>
-                <b>{r.letters.length}</b> LETTERS
-              </span>
-              <span>
-                <b>$55</b> EACH
-              </span>
-            </p>
-            <div className="totals">
-              <p>
-                <span>{r.letters.length} × 4-ft Letters</span>
-                <b>{money(r.sub)}</b>
-              </p>
-              {r.disc > 0 && (
-                <p className="discount">
-                  <span>4+ Letter Discount</span>
-                  <b>-{money(r.disc)}</b>
-                </p>
-              )}
-              {delivery > 0 && (
-                <p>
-                  <span>Delivery + Setup</span>
-                  <b>{money(delivery)}</b>
-                </p>
-              )}
-              {access > 0 && (
-                <p>
-                  <span>Elevator Access</span>
-                  <b>{money(access)}</b>
-                </p>
-              )}
-              <hr />
-              <p className="grand">
-                <span>{t.total}</span>
-                <b>{money(total)}</b>
-              </p>
-            </div>
-            {r.disc > 0 && (
-              <p className="saved">
-                ✦ {t.save} {money(r.disc)}
-              </p>
-            )}
-            <small>Standard rental: up to 24 hours</small>
+              <fieldset className="simpleFieldset"><legend>Event starts around</legend><div className="simpleChoices timeChoice">
+                {[{label:"Morning",time:"10:00"},{label:"Afternoon",time:"14:00"},{label:"Evening",time:"18:00"}].map(x=><button type="button" key={x.time} className={start===x.time?"selected":""} onClick={()=>{setStart(x.time);setEnd(`${String((Number(x.time.slice(0,2))+4)%24).padStart(2,"0")}:00`)}}>{x.label}</button>)}
+              </div></fieldset>
+              <fieldset className="simpleFieldset"><legend>How will you receive the letters?</legend><div className="simpleChoices">
+                <button type="button" className={fulfillment==="pickup"?"selected":""} onClick={()=>setFulfillment("pickup")}><b>Pickup</b><small>Free · Near Lawrenceville</small></button>
+                <button type="button" disabled={r.sub<200} className={fulfillment==="delivery"?"selected":""} onClick={()=>setFulfillment("delivery")}><b>Delivery</b><small>{r.sub>=200?"$75 including setup":"Available for $200+ orders"}</small></button>
+              </div></fieldset>
+              {!advanceOk&&<p className="error">Need it sooner? Call or text <a href="tel:+14046713228">+1 404-671-3228</a>.</p>}
+              <p className="availability">✓ <b>{r.valid}</b> is available. Final availability will be confirmed before payment.</p>
+            </>}
+
+            {step === 3 && <>
+              <h2>Contact & payment</h2>
+              <p>Tell us who the reservation is for, then review and pay securely.</p>
+              <div className="simpleGrid contactGrid">
+                <label>Full name<input autoComplete="name" value={name} onChange={e=>setName(e.target.value)} placeholder="First and last name" /></label>
+                <label>Mobile phone<input type="tel" autoComplete="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="(404) 555-0123" /></label>
+                <label className="full">Email<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" /></label>
+              </div>
+              {fulfillment==="delivery"&&<div className="conditionalAddress">
+                <h3>Delivery address</h3>
+                <div className="simpleGrid">
+                  <label className="full">Street address<input autoComplete="street-address" value={address} onChange={e=>setAddress(e.target.value)} placeholder="123 Main Street" /></label>
+                  <label>City<input autoComplete="address-level2" value={city} onChange={e=>setCity(e.target.value)} placeholder="Lawrenceville" /></label>
+                  <label>ZIP code<input inputMode="numeric" value={zip} maxLength={5} onChange={e=>setZip(e.target.value.replace(/\D/g,"").slice(0,5))} /></label>
+                </div>
+              </div>}
+              <div className="finalReview"><span><b>{r.valid}</b> · {r.letters.length} letters</span><span>{date||"Date needed"} · {fulfillment==="pickup"?"Pickup":"Delivery"}</span><strong>Total {money(total)}</strong></div>
+              <label className="check"><input type="checkbox" checked={termsAccepted} onChange={e=>setTermsAccepted(e.target.checked)} /> I agree to the Rental Terms & Conditions.</label>
+              {submitError&&<p className="error">{submitError}</p>}
+              <button className="simplePay" disabled={saving||!termsAccepted||!name||!email||!phone||(fulfillment==="delivery"&&!deliveryAddressComplete)} onClick={submitBooking}>{saving?"OPENING SECURE CHECKOUT…":`PAY ${money(total)} SECURELY →`}</button>
+              <small className="stripe">Secure payment powered by Stripe.</small>
+            </>}
+
+            {submitError&&step<3&&<p className={submitError.includes("saved on this device")?"notice":"error"}>{submitError}</p>}
+            {step<3&&<div className="simpleActions">{step>1&&<button className="back" onClick={()=>setStep((step-1) as Step)}>← Back</button>}<button className="continueButton" disabled={!canNext||saving} onClick={goNext}>{saving?"SAVING…":step===1?"Continue to date →":"Continue to contact →"}</button></div>}
+            {step===3&&<button className="simpleBack" onClick={()=>setStep(2)}>← Back</button>}
+          </div>
+          <aside className="compactSummary">
+            <div><b>{r.valid||"YOUR WORD"}</b><span>{r.letters.length} letters</span></div>
+            <p><span>Date</span><b>{date||"Not selected"}</b></p>
+            <p><span>Service</span><b>{fulfillment==="pickup"?"Free pickup":"Delivery + setup"}</b></p>
+            <p className="compactTotal"><span>Total</span><b>{money(total)}</b></p>
+            <small>Standard rental up to 24 hours</small>
           </aside>
         </div>
+        <div className="mobileBookingBar"><span><small>{r.valid} · {r.letters.length} letters</small><b>{money(total)}</b></span>{step<3?<button disabled={!canNext||saving} onClick={goNext}>Continue →</button>:<button disabled={saving||!termsAccepted||!name||!email||!phone||(fulfillment==="delivery"&&!deliveryAddressComplete)} onClick={submitBooking}>Pay →</button>}</div>
       </section>
       <section className="pricing pricingRedesign" id="pricing">
         <div className="pricingCopy">
