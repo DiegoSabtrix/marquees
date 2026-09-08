@@ -1,5 +1,13 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
+import {
+  calculateBookingItems,
+  selectionCountLabel,
+  selectionName,
+  SPECIAL_SYMBOL_IDS,
+  SPECIAL_SYMBOLS,
+  type SpecialSymbolId,
+} from "../lib/booking-items";
 declare global {
   interface Window {
     fbq?: (...args: unknown[]) => void;
@@ -8,6 +16,40 @@ declare global {
 }
 type Lang = "en" | "es";
 type Step = 1 | 2 | 3;
+function SpecialSymbolIcon({ id }: { id: SpecialSymbolId }) {
+  if (id === "AMPERSAND") return <span className="ampersandIcon" aria-hidden="true">&amp;</span>;
+  if (id === "HEART")
+    return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 20.4 4.1 13A5.2 5.2 0 0 1 11.4 5.6L12 6.2l.6-.6A5.2 5.2 0 0 1 19.9 13Z" /></svg>;
+  return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m8.2 7 2.2-3h3.2l2.2 3M7 8h10l3 4-8 8-8-8 3-4Z" /></svg>;
+}
+function MarqueeLetter({ character }: { character: string }) {
+  const base = `marquee-${useId().replace(/:/g, "")}`;
+  const maskId = `${base}-mask`;
+  const patternId = `${base}-bulbs`;
+  return <svg className="marqueeGlyphSvg" aria-hidden="true" viewBox="0 0 100 130">
+    <defs>
+      <mask id={maskId}><rect width="100" height="130" fill="black"/><text x="50" y="98" textAnchor="middle" className="marqueeSvgText" fill="white">{character}</text></mask>
+      <pattern id={patternId} width="15" height="15" patternUnits="userSpaceOnUse"><circle cx="7.5" cy="7.5" r="3.15" className="marqueeSvgBulb"/></pattern>
+    </defs>
+    <text x="50" y="98" textAnchor="middle" className="marqueeSvgText marqueeSvgBody">{character}</text>
+    <rect width="100" height="130" fill={`url(#${patternId})`} mask={`url(#${maskId})`} />
+  </svg>;
+}
+function MarqueeSymbolArt({ id }: { id: SpecialSymbolId }) {
+  const symbolBase = useId().replace(/:/g, "");
+  if (id === "AMPERSAND") return <MarqueeLetter character="&" />;
+  const base = `symbol-${symbolBase}`;
+  const maskId = `${base}-mask`;
+  const patternId = `${base}-bulbs`;
+  const heart = id === "HEART";
+  const path = heart ? "M50 84 11 47C-3 33 5 9 25 9c11 0 19 6 25 16C56 15 64 9 75 9c20 0 28 24 14 38Z" : "M50 7 68 33 90 50 50 94 10 50 32 33Z";
+  return <svg className="marqueeSymbolArt" aria-hidden="true" viewBox="0 0 100 100">
+    <defs><mask id={maskId}><rect width="100" height="100" fill="black"/><path d={path} fill="white" /></mask><pattern id={patternId} width="15" height="15" patternUnits="userSpaceOnUse"><circle cx="7.5" cy="7.5" r="3.15" className="marqueeSvgBulb"/></pattern></defs>
+    <path d={path} className="marqueeBody" />
+    <rect width="100" height="100" fill={`url(#${patternId})`} mask={`url(#${maskId})`} />
+    {!heart && <circle className="marqueeGem" cx="50" cy="24" r="10" />}
+  </svg>;
+}
 const C = {
   en: {
     hero: "LIGHT UP THE MOMENT.",
@@ -138,6 +180,8 @@ export default function Home() {
   const [lang, setLang] = useState<Lang>("en"),
     [step, setStep] = useState<Step>(1),
     [phrase, setPhrase] = useState("LOVE"),
+    [selectedSymbols, setSelectedSymbols] = useState<SpecialSymbolId[]>([]),
+    [ampersandSynced, setAmpersandSynced] = useState(false),
     [date, setDate] = useState(""),
     [start, setStart] = useState("18:00"),
     [end, setEnd] = useState("22:00"),
@@ -160,27 +204,15 @@ export default function Home() {
     [submitError, setSubmitError] = useState(""),
     [draftId, setDraftId] = useState(""),
     [attribution, setAttribution] = useState<Record<string, string>>({}),
-    [termsAccepted, setTermsAccepted] = useState(false);
+    [termsAccepted, setTermsAccepted] = useState(false),
+    [pageOpenedAt] = useState(() => Date.now());
   const t = C[lang];
-  const r = useMemo(() => {
-    const up = phrase.toUpperCase(),
-      valid = up.replace(/[^A-Z ]/g, ""),
-      letters = valid.replaceAll(" ", "").split(""),
-      counts: Record<string, number> = {};
-    letters.forEach((x) => (counts[x] = (counts[x] || 0) + 1));
-    const shortage = Object.entries(counts).find((x) => x[1] > 2),
-      sub = letters.length * 55,
-      disc = letters.length >= 4 ? sub * 0.1 : 0;
-    return {
-      valid,
-      letters,
-      shortage,
-      invalid: up !== valid,
-      sub,
-      disc,
-      rental: sub - disc,
-    };
-  }, [phrase]);
+  const r = useMemo(
+    () => calculateBookingItems(phrase, selectedSymbols),
+    [phrase, selectedSymbols],
+  );
+  const displaySelection = selectionName(r.phrase, r.selectedSymbols);
+  const countLabel = selectionCountLabel(r.letterCount, r.symbolCount);
   const delivery = fulfillment === "delivery" ? 75 : 0,
     access =
       fulfillment === "delivery" && floor === "no" && elevator === "yes"
@@ -190,18 +222,22 @@ export default function Home() {
   const money = (n: number) =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD" });
   const advanceOk =
-    !date || new Date(`${date}T${start}`).getTime() - Date.now() >= 86400000;
+    !date || new Date(`${date}T${start}`).getTime() - pageOpenedAt >= 86400000;
   const deliveryAddressComplete =
     !!address.trim() && !!city.trim() && state === "GA" && /^\d{5}$/.test(zip);
   const canNext =
     step === 1
-      ? !!r.letters.length && !r.shortage
+      ? r.totalItems > 0 && !r.shortage
       : step === 2
         ? !!date && advanceOk && /^\d{5}$/.test(zip) &&
-          (fulfillment === "pickup" || r.sub >= 200)
+          (fulfillment === "pickup" || r.subtotal >= 200)
         : true;
   const bookingData = () => ({
-    phrase: r.valid,
+    phrase: r.phrase,
+    selectedSymbols: r.selectedSymbols,
+    letterCount: r.letterCount,
+    symbolCount: r.symbolCount,
+    totalItems: r.totalItems,
     eventDate: date,
     startTime: start,
     endTime: end,
@@ -225,37 +261,58 @@ export default function Home() {
     notes,
     attribution,
   });
+  const toggleSymbol = (id: SpecialSymbolId) => {
+    setSelectedSymbols((current) =>
+      current.includes(id)
+        ? current.filter((symbol) => symbol !== id)
+        : [...current, id],
+    );
+    if (id === "AMPERSAND") setAmpersandSynced(false);
+  };
+  const updatePhrase = (value: string) => {
+    const upper = value.toUpperCase();
+    if (upper.includes("&")) {
+      setSelectedSymbols((current) =>
+        current.includes("AMPERSAND") ? current : [...current, "AMPERSAND"],
+      );
+      setAmpersandSynced(true);
+    }
+    setPhrase(upper.replaceAll("&", ""));
+  };
   const makeDraftId = () =>
     `DRAFT-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const track = (event: string, parameters: Record<string, unknown> = {}) =>
     window.gtag?.("event", event, parameters);
   useEffect(() => {
-    const saved = localStorage.getItem("marquees-draft-id");
-    if (saved) setDraftId(saved);
-    const storedAttribution = sessionStorage.getItem("marquees-attribution");
-    if (storedAttribution) {
-      try {
-        setAttribution(JSON.parse(storedAttribution));
-        return;
-      } catch {}
-    }
-    const params = new URLSearchParams(location.search);
-    const captured = [
-      "utm_source",
-      "utm_medium",
-      "utm_campaign",
-      "utm_content",
-      "utm_term",
-      "fbclid",
-    ].reduce<Record<string, string>>((result, key) => {
-      const value = params.get(key);
-      if (value) result[key] = value;
-      return result;
-    }, {});
-    captured.landing_page = location.href;
-    if (document.referrer) captured.referrer = document.referrer;
-    sessionStorage.setItem("marquees-attribution", JSON.stringify(captured));
-    setAttribution(captured);
+    const frame = requestAnimationFrame(() => {
+      const saved = localStorage.getItem("marquees-draft-id");
+      if (saved) setDraftId(saved);
+      const storedAttribution = sessionStorage.getItem("marquees-attribution");
+      if (storedAttribution) {
+        try {
+          setAttribution(JSON.parse(storedAttribution));
+          return;
+        } catch {}
+      }
+      const params = new URLSearchParams(location.search);
+      const captured = [
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_content",
+        "utm_term",
+        "fbclid",
+      ].reduce<Record<string, string>>((result, key) => {
+        const value = params.get(key);
+        if (value) result[key] = value;
+        return result;
+      }, {});
+      captured.landing_page = location.href;
+      if (document.referrer) captured.referrer = document.referrer;
+      sessionStorage.setItem("marquees-attribution", JSON.stringify(captured));
+      setAttribution(captured);
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
   useEffect(() => {
     const trackIntentClick = (event: MouseEvent) => {
@@ -274,6 +331,7 @@ export default function Home() {
     return () => document.removeEventListener("click", trackIntentClick);
   }, []);
   useEffect(() => {
+    track("booking_step_view", { step_number: step, step_name: ["what_you_need", "when_where", "contact_payment"][step - 1] });
     if (step > 1)
       requestAnimationFrame(() =>
         document
@@ -281,7 +339,7 @@ export default function Home() {
           ?.scrollIntoView({ behavior: "smooth", block: "start" }),
       );
   }, [step]);
-  async function persistDraft(next: number) {
+  async function persistDraft(next: number, notifyLead = false) {
     const localId = draftId || makeDraftId();
     if (!draftId) {
       setDraftId(localId);
@@ -305,6 +363,7 @@ export default function Home() {
         step: next,
         data: bookingData(),
         total,
+        notifyLead,
       }),
     });
     if (!response.ok)
@@ -349,34 +408,9 @@ export default function Home() {
     setSaving(true);
     setSubmitError("");
     try {
-      const id = draftId || (await persistDraft(5));
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draftId: id, data: bookingData(), total }),
-      });
-      const responseText = await response.text();
-      let result: { error?: string; url?: string } = {};
-      try {
-        result = responseText ? JSON.parse(responseText) : {};
-      } catch {}
-      if (!response.ok || !result.url)
-        throw new Error(
-          result.error ||
-            "We could not start secure payment. Please try again or call +1 404-671-3228.",
-        );
-      window.fbq?.("track", "InitiateCheckout", {
-        value: total,
-        currency: "USD",
-        content_name: `${r.valid} marquee letter rental`,
-        content_category: "Event rental booking",
-      });
-      track("begin_checkout", {
-        currency: "USD",
-        value: total,
-        items: [{ item_id: "marquee_letters", item_name: "Marquee letter rental" }],
-        fulfillment,
-      });
+      // Always persist the completed contact step before starting Stripe. This
+      // keeps the lead available even when payment cannot be opened.
+      const id = await persistDraft(3, true);
       const leadKey = `lead-tracked:${id}`;
       if (!sessionStorage.getItem(leadKey)) {
         track("generate_lead", {
@@ -392,10 +426,41 @@ export default function Home() {
         });
         sessionStorage.setItem(leadKey, "1");
       }
+      window.fbq?.("track", "InitiateCheckout", {
+        value: total,
+        currency: "USD",
+        content_name: `${displaySelection} marquee rental`,
+        content_category: "Event rental booking",
+      });
+      track("begin_checkout", {
+        currency: "USD",
+        value: total,
+        items: [{ item_id: "marquee_letters", item_name: "Marquee letter rental" }],
+        fulfillment,
+      });
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftId: id, data: bookingData(), total }),
+      });
+      const responseText = await response.text();
+      let result: { error?: string; url?: string } = {};
+      try {
+        result = responseText ? JSON.parse(responseText) : {};
+      } catch {}
+      if (!response.ok || !result.url)
+        throw new Error(
+          result.error ||
+            "We could not start secure payment. Please try again or call +1 404-671-3228.",
+        );
       localStorage.removeItem("marquees-booking-progress");
       localStorage.removeItem("marquees-draft-id");
       location.href = result.url;
     } catch (error) {
+      track("checkout_error", {
+        checkout_step: 3,
+        fulfillment,
+      });
       setSubmitError(
         error instanceof Error
           ? error.message
@@ -518,13 +583,44 @@ export default function Home() {
           <div className="simpleForm">
             {step === 1 && <>
               <h2>What do you need?</h2>
-              <p>Enter a name, word or number. Your price updates instantly.</p>
+              <p>Enter a name, word or number, then add any special symbols below.</p>
               <label>Your letters or phrase
-                <input className="word" value={phrase} onChange={e=>setPhrase(e.target.value.toUpperCase())} maxLength={24} placeholder="LOVE, HAPPY 30, EMMA…" autoFocus />
+                <input className="word" value={phrase} onChange={e=>updatePhrase(e.target.value)} onFocus={()=>{if(!sessionStorage.getItem("marquees-form-started")){track("booking_form_start",{form_id:"marquee_booking"});sessionStorage.setItem("marquees-form-started","1")}}} maxLength={24} placeholder="LOVE, HAPPY 30, EMMA…" autoFocus />
               </label>
               {r.invalid&&<p className="notice">Letters, numbers and spaces work best. Contact us for special characters.</p>}
+              {ampersandSynced&&<p className="success">Ampersand was added below as a special symbol, so it will only be charged once.</p>}
+              <fieldset className="symbolPicker">
+                <legend>Add a special symbol (optional)</legend>
+                <div>
+                  {SPECIAL_SYMBOL_IDS.map((id) => {
+                    const selected = r.selectedSymbols.includes(id);
+                    return <button
+                      type="button"
+                      key={id}
+                      className={selected ? "selected" : ""}
+                      aria-pressed={selected}
+                      aria-label={`${selected ? "Remove" : "Add"} ${SPECIAL_SYMBOLS[id].label} special symbol`}
+                      onClick={() => { toggleSymbol(id); track("select_special_symbol", { symbol_id: id, selected: !selected, value: total }); }}
+                    ><SpecialSymbolIcon id={id}/><span>{SPECIAL_SYMBOLS[id].label}</span></button>;
+                  })}
+                </div>
+              </fieldset>
+              <div
+                className="marqueePreview"
+                style={{ "--item-count": Math.max(r.totalItems, 1) } as React.CSSProperties}
+                aria-label={`Marquee preview of ${displaySelection || "your selection"}`}
+              >
+                {r.letters.map((character, index) => (
+                  <div className="marqueeCharacter" key={`letter-${index}`}><MarqueeLetter character={character} /></div>
+                ))}
+                {r.selectedSymbols.map((id) => (
+                  <div className="marqueeCharacter marqueeSymbol" key={`symbol-${id}`} aria-hidden="true">
+                    <MarqueeSymbolArt id={id} />
+                  </div>
+                ))}
+              </div>
               {r.shortage&&<p className="error">We only have two of each letter. Try another phrase or contact us.</p>}
-              <div className="instantPrice"><span>{r.letters.length} letters · $55 each{r.disc>0?" · 10% discount":""}</span><b>{money(r.rental)}</b></div>
+              <div className="instantPrice"><span>{countLabel || "Choose at least one item"} · $55 each{r.discount>0?" · 10% discount":""}</span><b>{money(r.rental)}</b></div>
             </>}
 
             {step === 2 && <>
@@ -532,7 +628,7 @@ export default function Home() {
               <p>Select the date, approximate start time and how you’ll receive the letters.</p>
               <div className="simpleGrid">
                 <label>Event date
-                  <input type="date" value={date} min={new Date(Date.now()+86400000).toISOString().slice(0,10)} onChange={e=>setDate(e.target.value)} />
+                  <input type="date" value={date} min={new Date(pageOpenedAt+86400000).toISOString().slice(0,10)} onChange={e=>setDate(e.target.value)} />
                 </label>
                 <label>Event ZIP code
                   <input inputMode="numeric" autoComplete="postal-code" value={zip} maxLength={5} onChange={e=>setZip(e.target.value.replace(/\D/g,"").slice(0,5))} placeholder="30046" />
@@ -543,10 +639,10 @@ export default function Home() {
               </div></fieldset>
               <fieldset className="simpleFieldset"><legend>How will you receive the letters?</legend><div className="simpleChoices">
                 <button type="button" className={fulfillment==="pickup"?"selected":""} onClick={()=>setFulfillment("pickup")}><b>Pickup</b><small>Free · Near Lawrenceville</small></button>
-                <button type="button" disabled={r.sub<200} className={fulfillment==="delivery"?"selected":""} onClick={()=>setFulfillment("delivery")}><b>Delivery</b><small>{r.sub>=200?"$75 including setup":"Available for $200+ orders"}</small></button>
+                <button type="button" disabled={r.subtotal<200} className={fulfillment==="delivery"?"selected":""} onClick={()=>setFulfillment("delivery")}><b>Delivery</b><small>{r.subtotal>=200?"$75 including setup":"Available for $200+ orders"}</small></button>
               </div></fieldset>
               {!advanceOk&&<p className="error">Need it sooner? Call or text <a href="tel:+14046713228">+1 404-671-3228</a>.</p>}
-              <p className="availability">✓ <b>{r.valid}</b> is available. Final availability will be confirmed before payment.</p>
+              <p className="availability">✓ <b>{displaySelection}</b> is available. Final availability will be confirmed before payment.</p>
             </>}
 
             {step === 3 && <>
@@ -565,7 +661,7 @@ export default function Home() {
                   <label>ZIP code<input inputMode="numeric" value={zip} maxLength={5} onChange={e=>setZip(e.target.value.replace(/\D/g,"").slice(0,5))} /></label>
                 </div>
               </div>}
-              <div className="finalReview"><span><b>{r.valid}</b> · {r.letters.length} letters</span><span>{date||"Date needed"} · {fulfillment==="pickup"?"Pickup":"Delivery"}</span><strong>Total {money(total)}</strong></div>
+              <div className="finalReview"><span><b>{displaySelection}</b> · {countLabel}</span><span>{date||"Date needed"} · {fulfillment==="pickup"?"Pickup":"Delivery"}</span><strong>Total {money(total)}</strong></div>
               <label className="check"><input type="checkbox" checked={termsAccepted} onChange={e=>setTermsAccepted(e.target.checked)} /> I agree to the Rental Terms & Conditions.</label>
               {submitError&&<p className="error">{submitError}</p>}
               <button className="simplePay" disabled={saving||!termsAccepted||!name||!email||!phone||(fulfillment==="delivery"&&!deliveryAddressComplete)} onClick={submitBooking}>{saving?"OPENING SECURE CHECKOUT…":`PAY ${money(total)} SECURELY →`}</button>
@@ -577,14 +673,14 @@ export default function Home() {
             {step===3&&<button className="simpleBack" onClick={()=>setStep(2)}>← Back</button>}
           </div>
           <aside className="compactSummary">
-            <div><b>{r.valid||"YOUR WORD"}</b><span>{r.letters.length} letters</span></div>
+            <div><b>{displaySelection||"YOUR SELECTION"}</b><span>{countLabel||"No items selected"}</span></div>
             <p><span>Date</span><b>{date||"Not selected"}</b></p>
             <p><span>Service</span><b>{fulfillment==="pickup"?"Free pickup":"Delivery + setup"}</b></p>
             <p className="compactTotal"><span>Total</span><b>{money(total)}</b></p>
             <small>Standard rental up to 24 hours</small>
           </aside>
         </div>
-        <div className="mobileBookingBar"><span><small>{r.valid} · {r.letters.length} letters</small><b>{money(total)}</b></span>{step<3?<button disabled={!canNext||saving} onClick={goNext}>Continue →</button>:<button disabled={saving||!termsAccepted||!name||!email||!phone||(fulfillment==="delivery"&&!deliveryAddressComplete)} onClick={submitBooking}>Pay →</button>}</div>
+        <div className="mobileBookingBar"><span><small>{displaySelection||"Your selection"} · {countLabel||"No items"}</small><b>{money(total)}</b></span>{step<3?<button disabled={!canNext||saving} onClick={goNext}>Continue →</button>:<button disabled={saving||!termsAccepted||!name||!email||!phone||(fulfillment==="delivery"&&!deliveryAddressComplete)} onClick={submitBooking}>Pay →</button>}</div>
       </section>
       <section className="pricing pricingRedesign" id="pricing">
         <div className="pricingCopy">
@@ -741,7 +837,7 @@ export default function Home() {
       <section className="contactCta">
         <img src="/brand/marquees-logo.png" alt="MARQuees Lights & Events" />
         <div>
-          <p className="eyebrow">LET'S LIGHT UP YOUR EVENT</p>
+          <p className="eyebrow">LET&apos;S LIGHT UP YOUR EVENT</p>
           <h2>Your word. Your moment.</h2>
         </div>
         <a className="btn gold" href="tel:+14046713228">
