@@ -14,6 +14,13 @@ export async function POST(request: Request) {
       { error: "A complete Georgia delivery address is required." },
       { status: 400 },
     );
+  const minEventTime = Date.now() + 86400000;
+  const eventTime = new Date(`${data.eventDate || ""}T${data.startTime || "00:00"}`).getTime();
+  if (!Number.isFinite(eventTime) || eventTime < minEventTime)
+    return Response.json(
+      { error: "Please choose a future event date." },
+      { status: 400 },
+    );
   const phrase = String(data.phrase || "")
     .toUpperCase()
     .replace(/[^A-Z ]/g, "")
