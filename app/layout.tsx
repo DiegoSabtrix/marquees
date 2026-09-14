@@ -49,7 +49,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 function gtag(){dataLayer.push(arguments);}
 window.gtag = gtag;
 gtag('js', new Date());
-gtag('config', 'G-WN549WV4LJ');`}
+gtag('config', 'G-WN549WV4LJ');
+gtag('config', 'AW-18419005508');`}
         </Script>
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-886E4EGBEZ"
