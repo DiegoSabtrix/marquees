@@ -221,8 +221,13 @@ export default function Home() {
     total = r.rental + delivery + access;
   const money = (n: number) =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const minEventDate = new Date(pageOpenedAt + 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const eventDateIsValid = !date || date >= minEventDate;
   const advanceOk =
-    !date || new Date(`${date}T${start}`).getTime() - pageOpenedAt >= 86400000;
+    eventDateIsValid &&
+    (!date || new Date(`${date}T${start}`).getTime() - pageOpenedAt >= 86400000);
   const deliveryAddressComplete =
     !!address.trim() && !!city.trim() && state === "GA" && /^\d{5}$/.test(zip);
   const canNext =
@@ -283,6 +288,24 @@ export default function Home() {
     `DRAFT-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const track = (event: string, parameters: Record<string, unknown> = {}) =>
     window.gtag?.("event", event, parameters);
+  const reportCallConversion = (url?: string) => {
+    const callback = () => {
+      if (url) window.location.href = url;
+    };
+    if (typeof window.gtag === "function") {
+      window.gtag("event", "conversion", {
+        send_to: "AW-18419005508/8zXECNef1_ccEMTw7s5E",
+        event_callback: callback,
+      });
+      window.setTimeout(callback, 800);
+      return false;
+    }
+    callback();
+    return false;
+  };
+  const handleDateChange = (value: string) => {
+    setDate(value && value < minEventDate ? minEventDate : value);
+  };
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       const saved = localStorage.getItem("marquees-draft-id");
@@ -324,8 +347,11 @@ export default function Home() {
           content_type: "booking_cta",
           item_id: "marquee_booking",
         });
-      if (href.startsWith("tel:"))
+      if (href.startsWith("tel:")) {
         track("contact", { method: "phone", link_location: "website" });
+        event.preventDefault();
+        reportCallConversion(href);
+      }
     };
     document.addEventListener("click", trackIntentClick);
     return () => document.removeEventListener("click", trackIntentClick);
@@ -340,6 +366,8 @@ export default function Home() {
       );
   }, [step]);
   async function persistDraft(next: number, notifyLead = false) {
+    if (date && !eventDateIsValid)
+      throw new Error("Please choose a future event date.");
     const localId = draftId || makeDraftId();
     if (!draftId) {
       setDraftId(localId);
@@ -373,6 +401,10 @@ export default function Home() {
     return localId;
   }
   async function goNext() {
+    if (step === 2 && (!date || !eventDateIsValid || !advanceOk)) {
+      setSubmitError("Please choose a future event date.");
+      return;
+    }
     setSaving(true);
     setSubmitError("");
     const next = (step + 1) as Step;
@@ -403,6 +435,10 @@ export default function Home() {
   async function submitBooking() {
     if (!termsAccepted) {
       setSubmitError("Please accept the Rental Terms & Conditions.");
+      return;
+    }
+    if (!date || !eventDateIsValid || !advanceOk) {
+      setSubmitError("Please choose a future event date.");
       return;
     }
     setSaving(true);
@@ -628,8 +664,9 @@ export default function Home() {
               <p>Select the date, approximate start time and how you’ll receive the letters.</p>
               <div className="simpleGrid">
                 <label>Event date
-                  <input type="date" value={date} min={new Date(pageOpenedAt+86400000).toISOString().slice(0,10)} onChange={e=>setDate(e.target.value)} />
+                  <input type="date" value={date} min={minEventDate} onChange={e=>handleDateChange(e.target.value)} />
                 </label>
+                {date && !eventDateIsValid && <p className="error full">Please choose a future event date.</p>}
                 <label>Event ZIP code
                   <input inputMode="numeric" autoComplete="postal-code" value={zip} maxLength={5} onChange={e=>setZip(e.target.value.replace(/\D/g,"").slice(0,5))} placeholder="30046" />
                 </label>
@@ -680,7 +717,7 @@ export default function Home() {
             <small>Standard rental up to 24 hours</small>
           </aside>
         </div>
-        <div className="mobileBookingBar"><span><small>{displaySelection||"Your selection"} · {countLabel||"No items"}</small><b>{money(total)}</b></span>{step<3?<button disabled={!canNext||saving} onClick={goNext}>Continue →</button>:<button disabled={saving||!termsAccepted||!name||!email||!phone||(fulfillment==="delivery"&&!deliveryAddressComplete)} onClick={submitBooking}>Pay →</button>}</div>
+        <div className="mobileBookingBar"><span><small>Call now or book online</small><b>+1 404-671-3228</b></span><a className="mobileCallButton" href="tel:+14046713228">Call now</a>{step<3?<button disabled={!canNext||saving} onClick={goNext}>Book</button>:<button disabled={saving||!termsAccepted||!name||!email||!phone||(fulfillment==="delivery"&&!deliveryAddressComplete)} onClick={submitBooking}>Pay</button>}</div>
       </section>
       <section className="pricing pricingRedesign" id="pricing">
         <div className="pricingCopy">
@@ -857,8 +894,8 @@ export default function Home() {
         </p>
         <p>© 2026 MARQuees Lights and Events. All Rights Reserved.</p>
       </footer>
-      <a className="mobile" href="#book">
-        {t.build} · +1 404-671-3228
+      <a className="mobile" href="tel:+14046713228">
+        CALL NOW · +1 404-671-3228
       </a>
     </main>
   );
