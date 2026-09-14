@@ -187,6 +187,11 @@ export async function createPendingBooking(
     if (existing)
       return { id: String(existing.id), total: Number(existing.total) };
   }
+  const minEventTime = Date.now() + 86400000;
+  const eventTime = new Date(`${data.eventDate || ""}T${data.startTime || "00:00"}`).getTime();
+  if (!Number.isFinite(eventTime) || eventTime < minEventTime) {
+    throw new Error("Please choose a future event date.");
+  }
   if (
     data.fulfillment === "delivery" &&
     (!String(data.address || "").trim() ||
