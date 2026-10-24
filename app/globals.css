@@ -274,3 +274,20 @@ footer .footerLinks{justify-self:center}
 .deliveryCopy>small{display:block;color:#c5c3bb;line-height:1.6;font-size:11px}
 @media(max-width:950px){footer:not(.legalFooter){grid-template-columns:1fr 1fr}}
 @media(max-width:600px){.cityGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.cityTile{padding:11px 8px;column-gap:6px}.cityTile b{font-size:10px}.zips{padding:24px 18px;gap:14px}.deliveryIcon{flex-basis:54px;width:54px;height:54px}.deliveryIcon svg{width:34px}.pricingImageNote{font-size:9px}}
+
+/* Two-photo hero rotation using existing event photography. */
+.heroPhoto{opacity:0;transition:opacity 1s ease-in-out}
+.heroPhoto.isActive{opacity:1}
+.heroSlideControls{position:absolute;left:50%;bottom:24px;z-index:4;display:flex;gap:10px;transform:translateX(-50%)}
+.heroSlideControls button{width:12px;height:12px;min-width:12px;padding:0;border:1px solid #f2d77d;border-radius:50%;background:rgba(0,0,0,.45);cursor:pointer}
+.heroSlideControls button[aria-pressed="true"]{background:#f2d77d;box-shadow:0 0 10px rgba(242,215,125,.65)}
+.heroSlideControls button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){.heroPhoto{transition:none}}
+
+/* Blurred celebration photo behind the local delivery information. */
+.area{position:relative;isolation:isolate;overflow:hidden;background:#141414}
+.area::before{content:"";position:absolute;inset:-10px;z-index:-2;background:url("/gallery/welcome-event.webp") center 58%/cover no-repeat;filter:blur(8px);transform:scale(1.05);opacity:.9;pointer-events:none}
+.area::after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(8,8,8,.82),rgba(8,8,8,.72) 55%,rgba(8,8,8,.82));pointer-events:none}
+.area>*{position:relative;z-index:1}
+.area .zips{background:rgba(24,23,20,.82);backdrop-filter:blur(4px)}
+@media(max-width:760px){.heroSlideControls{bottom:18px}}

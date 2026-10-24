@@ -52,8 +52,6 @@ function MarqueeSymbolArt({ id }: { id: SpecialSymbolId }) {
 }
 const C = {
   en: {
-    hero: "LIGHT UP THE MOMENT.",
-    sub: "Create unforgettable names, words and statements with our 4-foot illuminated marquee letters.",
     build: "BUILD YOUR WORD",
     check: "CHECK YOUR DATE",
     trust: "Pickup in Lawrenceville • Local delivery available",
@@ -65,8 +63,6 @@ const C = {
     total: "Rental Total",
   },
   es: {
-    hero: "ILUMINA TU MOMENTO.",
-    sub: "Crea nombres, palabras y momentos inolvidables con nuestras letras marquee iluminadas de 4 pies.",
     build: "CREA TU PALABRA",
     check: "VER DISPONIBILIDAD",
     trust: "Recogida en Lawrenceville • Entrega local disponible",
@@ -78,6 +74,46 @@ const C = {
     total: "Total de alquiler",
   },
 };
+const heroSlides = [
+  {
+    image: "/gallery/love-garden.webp",
+    alt: {
+      en: "LOVE marquee letters at a floral outdoor celebration",
+      es: "Letras LOVE iluminadas en una celebración al aire libre con flores",
+    },
+    copy: {
+      en: {
+        eyebrow: "4-FT MARQUEE LETTER RENTALS • ATLANTA AREA",
+        headline: "LIGHT UP THE MOMENT.",
+        sub: "Create unforgettable names, words and statements with our 4-foot illuminated marquee letters.",
+      },
+      es: {
+        eyebrow: "ALQUILER DE LETRAS MARQUEE DE 4 PIES • ATLANTA AREA",
+        headline: "ILUMINA TU MOMENTO.",
+        sub: "Crea nombres, palabras y momentos inolvidables con nuestras letras marquee iluminadas de 4 pies.",
+      },
+    },
+  },
+  {
+    image: "/gallery/prom-event.webp",
+    alt: {
+      en: "Glowing PROM marquee letters at an elegant celebration",
+      es: "Letras PROM iluminadas en una elegante celebración",
+    },
+    copy: {
+      en: {
+        eyebrow: "A STATEMENT FOR EVERY CELEBRATION",
+        headline: "MAKE YOUR EVENT SHINE.",
+        sub: "Give birthdays, proms, weddings and graduations a glowing centerpiece to remember.",
+      },
+      es: {
+        eyebrow: "UN DETALLE ESPECIAL PARA CADA CELEBRACIÓN",
+        headline: "HAZ BRILLAR TU CELEBRACIÓN.",
+        sub: "Dale a tu cumpleaños, prom, boda o graduación un detalle iluminado inolvidable.",
+      },
+    },
+  },
+] as const;
 const eventTypes = [
   "Birthday",
   "Baby Shower",
@@ -184,6 +220,7 @@ const faqItems = [
 ];
 export default function Home() {
   const [lang, setLang] = useState<Lang>("en"),
+    [heroSlide, setHeroSlide] = useState<0 | 1>(0),
     [step, setStep] = useState<Step>(1),
     [phrase, setPhrase] = useState("LOVE"),
     [selectedSymbols, setSelectedSymbols] = useState<SpecialSymbolId[]>([]),
@@ -213,6 +250,15 @@ export default function Home() {
     [termsAccepted, setTermsAccepted] = useState(false),
     [pageOpenedAt] = useState(() => Date.now());
   const t = C[lang];
+  const activeHero = heroSlides[heroSlide];
+  const activeHeroCopy = activeHero.copy[lang];
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const interval = window.setInterval(() => {
+      setHeroSlide((current) => (current === 0 ? 1 : 0));
+    }, 6500);
+    return () => window.clearInterval(interval);
+  }, []);
   const r = useMemo(
     () => calculateBookingItems(phrase, selectedSymbols),
     [phrase, selectedSymbols],
@@ -517,11 +563,15 @@ export default function Home() {
         </a>
       </nav>
       <section className="hero" id="top">
-        <img
-          className="heroPhoto"
-          src="/gallery/love-garden.webp"
-          alt="LOVE marquee letters with a floral heart at an outdoor celebration"
-        />
+        {heroSlides.map((slide, index) => (
+          <img
+            key={slide.image}
+            className={`heroPhoto${heroSlide === index ? " isActive" : ""}`}
+            src={slide.image}
+            alt={heroSlide === index ? slide.alt[lang] : ""}
+            aria-hidden={heroSlide !== index}
+          />
+        ))}
         <div className="heroShade" />
         <div className="heroCopy">
           <img
@@ -529,11 +579,9 @@ export default function Home() {
             src="/brand/marquees-logo.png"
             alt="MARQuees Lights & Events"
           />
-          <p className="eyebrow">
-            4-FT MARQUEE LETTER RENTALS • ATLANTA AREA
-          </p>
-          <h1>{t.hero}</h1>
-          <p className="lead">{t.sub}</p>
+          <p className="eyebrow">{activeHeroCopy.eyebrow}</p>
+          <h1>{activeHeroCopy.headline}</h1>
+          <p className="lead">{activeHeroCopy.sub}</p>
           <p className="price">
             <b>Starting at $55 per letter</b>
             <span>SAVE 10% WHEN YOU RENT 4+ LETTERS</span>
@@ -550,6 +598,21 @@ export default function Home() {
             ✦ {t.trust} &nbsp; · &nbsp;{" "}
             <a className="heroPhoneLink" href="tel:+14046713228" aria-label="Call or text MARQuees at 404-671-3228">Call/Text +1 404-671-3228</a>
           </small>
+        </div>
+        <div
+          className="heroSlideControls"
+          role="group"
+          aria-label={lang === "en" ? "Featured event photos" : "Fotos destacadas de eventos"}
+        >
+          {heroSlides.map((slide, index) => (
+            <button
+              key={slide.image}
+              type="button"
+              aria-label={`${lang === "en" ? "Show" : "Mostrar"} ${index + 1}: ${slide.copy[lang].headline}`}
+              aria-pressed={heroSlide === index}
+              onClick={() => setHeroSlide(index as 0 | 1)}
+            />
+          ))}
         </div>
       </section>
       <section className="how" id="how">
