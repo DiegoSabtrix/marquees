@@ -37,7 +37,10 @@ async function getPostgresDb(databaseUrl: string) {
       amount_paid double precision NOT NULL DEFAULT 0,
       payment_status text NOT NULL DEFAULT 'Unpaid',
       status text NOT NULL DEFAULT 'New request',
-      letter_count integer NOT NULL
+      letter_count integer NOT NULL,
+      selected_symbols text NOT NULL DEFAULT '[]',
+      symbol_count integer NOT NULL DEFAULT 0,
+      total_items integer NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS stripe_settings (
       id text PRIMARY KEY,
@@ -56,6 +59,9 @@ async function getPostgresDb(databaseUrl: string) {
     ALTER TABLE bookings ADD COLUMN IF NOT EXISTS state text;
     ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_miles double precision;
     ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_fee double precision;
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS selected_symbols text NOT NULL DEFAULT '[]';
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS symbol_count integer NOT NULL DEFAULT 0;
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS total_items integer NOT NULL DEFAULT 0;
   `);
   postgresDb = postgresDrizzle(client) as unknown;
   return postgresDb;

@@ -41,7 +41,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-WN549WV4LJ"
+          src="https://www.googletagmanager.com/gtag/js?id=G-886E4EGBEZ"
           strategy="afterInteractive"
         />
         <Script id="google-analytics" strategy="afterInteractive">
@@ -49,15 +49,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 function gtag(){dataLayer.push(arguments);}
 window.gtag = gtag;
 gtag('js', new Date());
-gtag('config', 'G-WN549WV4LJ');
-gtag('config', 'AW-18419005508');`}
-        </Script>
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-886E4EGBEZ"
-          strategy="afterInteractive"
-        />
-        <Script id="google-analytics-marquees" strategy="afterInteractive">
-          {`gtag('config', 'G-886E4EGBEZ');`}
+gtag('config', 'G-886E4EGBEZ');
+gtag('config', 'G-WN549WV4LJ');`}
         </Script>
         <Script
           id="local-business-schema"

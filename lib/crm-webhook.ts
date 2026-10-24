@@ -1,3 +1,5 @@
+import { calculateBookingItems } from "./booking-items";
+
 type BookingData = Record<string, unknown>;
 
 type CrmWebhookInput = {
@@ -34,6 +36,10 @@ export async function sendCrmWebhook(input: CrmWebhookInput) {
     input.data.attribution && typeof input.data.attribution === "object"
       ? input.data.attribution
       : {};
+  const bookingItems = calculateBookingItems(
+    input.data.phrase,
+    input.data.selectedSymbols || input.data.selected_symbols,
+  );
   const payload = {
     event_type: input.stage,
     lifecycle_stage:
@@ -58,6 +64,14 @@ export async function sendCrmWebhook(input: CrmWebhookInput) {
     amount: Number(input.total || 0),
     currency: "USD",
     phrase: String(input.data.phrase || ""),
+    selectedSymbols: bookingItems.selectedSymbols,
+    letterCount: bookingItems.letterCount,
+    symbolCount: bookingItems.symbolCount,
+    totalItems: bookingItems.totalItems,
+    selected_symbols: bookingItems.selectedSymbols.join(", "),
+    letter_count: bookingItems.letterCount,
+    symbol_count: bookingItems.symbolCount,
+    total_items: bookingItems.totalItems,
     event_date: String(input.data.eventDate || input.data.event_date || ""),
     start_time: String(input.data.startTime || input.data.start_time || ""),
     end_time: String(input.data.endTime || input.data.end_time || ""),

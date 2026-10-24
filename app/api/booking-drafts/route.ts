@@ -5,7 +5,7 @@ export async function POST(request:Request) {
   try {
     const body=await request.json();
     const id=await saveDraft({id:body.id,step:Number(body.step)||1,data:body.data||{},total:Number(body.total)||0});
-    if(Number(body.step)>=5&&body.data?.email&&body.data?.customerName) {
+    if(body.notifyLead===true&&Number(body.step)>=3&&body.data?.email&&body.data?.customerName) {
       await notifyCrm({stage:"lead_created",eventId:`lead:${id}`,draftId:id,data:body.data,total:Number(body.total)||0,paymentStatus:"Lead"});
     }
     return Response.json({id});

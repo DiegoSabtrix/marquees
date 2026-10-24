@@ -1,6 +1,7 @@
 import { createPendingBooking, createPaymentAttempt, attachStripeSession, failPaymentAttempt, getStripeSettings } from "../../../db/store";
 import { decryptStripeSecret } from "../../../lib/stripe-settings";
 import { notifyCrm } from "../../../lib/crm-webhook";
+import { selectionName } from "../../../lib/booking-items";
 
 function publicOrigin(request:Request) {
   const configured=process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/,"");
@@ -18,10 +19,10 @@ export async function POST(request:Request) {
     const body=await request.json();
     if(!body.draftId||!body.data?.email||!body.data?.customerName||!body.data?.eventDate) return Response.json({error:"Complete all reservation details first"},{status:400});
     const settings=await getStripeSettings();
-    if(!settings) return Response.json({error:"Online payment is not configured yet. Please contact us at 404-671-3228."},{status:503});
+    if(!settings) return Response.json({error:"Online payment is not configured yet. Please contact us at +1 404-671-3228."},{status:503});
     const mode=(settings.active_mode||"test") as "test"|"live";
     const encrypted=settings[`${mode}_secret_key_encrypted`] as string|undefined;
-    if(!encrypted) return Response.json({error:`Stripe ${mode} mode is not configured yet. Please contact us at 404-671-3228.`},{status:503});
+    if(!encrypted) return Response.json({error:`Stripe ${mode} mode is not configured yet. Please contact us at +1 404-671-3228.`},{status:503});
     const secret=await decryptStripeSecret(encrypted);
     const booking=await createPendingBooking(body.data,body.draftId);
     const bookingId=booking.id;
@@ -32,7 +33,7 @@ export async function POST(request:Request) {
     const params=new URLSearchParams();
     params.set("mode","payment"); params.set("success_url",`${origin}/booking-confirmed?session_id={CHECKOUT_SESSION_ID}`); params.set("cancel_url",`${origin}/?payment=cancelled&draft=${encodeURIComponent(body.draftId)}#book`);
     params.set("customer_email",body.data.email); params.set("client_reference_id",bookingId);
-    params.set("line_items[0][price_data][currency]","usd"); params.set("line_items[0][price_data][unit_amount]",String(amount)); params.set("line_items[0][price_data][product_data][name]",`${body.data.phrase} marquee letter rental`); params.set("line_items[0][quantity]","1");
+    params.set("line_items[0][price_data][currency]","usd"); params.set("line_items[0][price_data][unit_amount]",String(amount)); params.set("line_items[0][price_data][product_data][name]",`${selectionName(body.data.phrase,body.data.selectedSymbols)||"Marquee selection"} rental`); params.set("line_items[0][quantity]","1");
     params.set("metadata[booking_id]",bookingId); params.set("metadata[draft_id]",body.draftId); params.set("payment_intent_data[metadata][booking_id]",bookingId);
     let stripe:Response;
     try { stripe=await fetch("https://api.stripe.com/v1/checkout/sessions",{method:"POST",headers:{Authorization:`Bearer ${secret}`,"Content-Type":"application/x-www-form-urlencoded","Idempotency-Key":attemptId},body:params}); }
@@ -48,6 +49,6 @@ export async function POST(request:Request) {
     const message=error instanceof Error?error.message:"";
     const configurationError=/PostgreSQL|DATABASE_URL|not configured|Database binding/i.test(message);
     const deliveryError=/delivery address|driving miles|driving distance|route|address could not|could not find that address/i.test(message);
-    return Response.json({error:configurationError?"Online booking is temporarily unavailable while payment setup is completed. Please call or text 404-671-3228.":deliveryError?message:"We could not start secure payment. Please try again or call 404-671-3228."},{status:configurationError?503:400});
+    return Response.json({error:configurationError?"Online booking is temporarily unavailable while payment setup is completed. Please call or text +1 404-671-3228.":deliveryError?message:"We could not start secure payment. Please try again or call +1 404-671-3228."},{status:configurationError?503:400});
   }
 }

@@ -30,6 +30,9 @@ export const bookings = sqliteTable("bookings", {
   paymentStatus: text("payment_status").notNull().default("Unpaid"),
   status: text("status").notNull().default("New request"),
   letterCount: integer("letter_count").notNull(),
+  selectedSymbols: text("selected_symbols").notNull().default("[]"),
+  symbolCount: integer("symbol_count").notNull().default(0),
+  totalItems: integer("total_items").notNull().default(0),
 });
 
 export const stripeSettings = sqliteTable("stripe_settings", {

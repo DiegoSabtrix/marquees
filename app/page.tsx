@@ -102,6 +102,12 @@ const gallery = [
   ["/gallery/crna.webp", "CRNA illuminated marquee letters"],
   ["/gallery/birthday-four.webp", "Four marquee number with birthday decor"],
   ["/gallery/birthday-27.webp", "Twenty-seven marquee numbers with balloons"],
+  ["/gallery/graduation-grad.webp", "AI-generated graduation inspiration with illuminated GRAD letters"],
+  ["/gallery/prom-event.webp", "AI-generated prom inspiration with illuminated PROM letters"],
+  ["/gallery/baby-shower.webp", "AI-generated baby shower inspiration with illuminated BABY letters"],
+  ["/gallery/birthday-75.webp", "AI-generated 75th birthday inspiration with illuminated marquee numbers"],
+  ["/gallery/quinceanera-15.webp", "AI-generated quinceañera inspiration with illuminated 15 marquee numbers"],
+  ["/gallery/welcome-event.webp", "AI-generated event entrance inspiration with illuminated WELCOME letters"],
 ];
 const sampleReviews = [
   [
@@ -141,7 +147,7 @@ const faqItems = [
   ],
   [
     "How can I reserve my marquee letters?",
-    "Build your word, select your date and event time, choose pickup or delivery, and provide your event details. After reviewing the total, eligible events more than seven days away may reserve with a $100 retainer; otherwise full payment is required.",
+    "Build your word, select your date and event time, choose pickup or eligible delivery, and provide your event details. Pay the amount shown at checkout; we will confirm final availability and reservation details.",
   ],
   [
     "Can I pick up the marquee letters?",
@@ -221,13 +227,8 @@ export default function Home() {
     total = r.rental + delivery + access;
   const money = (n: number) =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD" });
-  const minEventDate = new Date(pageOpenedAt + 86400000)
-    .toISOString()
-    .slice(0, 10);
-  const eventDateIsValid = !date || date >= minEventDate;
   const advanceOk =
-    eventDateIsValid &&
-    (!date || new Date(`${date}T${start}`).getTime() - pageOpenedAt >= 86400000);
+    !date || new Date(`${date}T${start}`).getTime() - pageOpenedAt >= 86400000;
   const deliveryAddressComplete =
     !!address.trim() && !!city.trim() && state === "GA" && /^\d{5}$/.test(zip);
   const canNext =
@@ -286,25 +287,14 @@ export default function Home() {
   };
   const makeDraftId = () =>
     `DRAFT-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const track = (event: string, parameters: Record<string, unknown> = {}) =>
-    window.gtag?.("event", event, parameters);
-  const reportCallConversion = (url?: string) => {
-    const callback = () => {
-      if (url) window.location.href = url;
-    };
-    if (typeof window.gtag === "function") {
-      window.gtag("event", "conversion", {
-        send_to: "AW-18419005508/8zXECNef1_ccEMTw7s5E",
-        event_callback: callback,
-      });
-      window.setTimeout(callback, 800);
-      return false;
+  const track = (event: string, parameters: Record<string, unknown> = {}) => {
+    window.dataLayer = window.dataLayer || [];
+    if (!window.gtag) {
+      window.gtag = function (...args: unknown[]) {
+        window.dataLayer?.push(args);
+      };
     }
-    callback();
-    return false;
-  };
-  const handleDateChange = (value: string) => {
-    setDate(value && value < minEventDate ? minEventDate : value);
+    window.gtag("event", event, parameters);
   };
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -347,11 +337,8 @@ export default function Home() {
           content_type: "booking_cta",
           item_id: "marquee_booking",
         });
-      if (href.startsWith("tel:")) {
+      if (href.startsWith("tel:"))
         track("contact", { method: "phone", link_location: "website" });
-        event.preventDefault();
-        reportCallConversion(href);
-      }
     };
     document.addEventListener("click", trackIntentClick);
     return () => document.removeEventListener("click", trackIntentClick);
@@ -366,8 +353,6 @@ export default function Home() {
       );
   }, [step]);
   async function persistDraft(next: number, notifyLead = false) {
-    if (date && !eventDateIsValid)
-      throw new Error("Please choose a future event date.");
     const localId = draftId || makeDraftId();
     if (!draftId) {
       setDraftId(localId);
@@ -401,10 +386,6 @@ export default function Home() {
     return localId;
   }
   async function goNext() {
-    if (step === 2 && (!date || !eventDateIsValid || !advanceOk)) {
-      setSubmitError("Please choose a future event date.");
-      return;
-    }
     setSaving(true);
     setSubmitError("");
     const next = (step + 1) as Step;
@@ -435,10 +416,6 @@ export default function Home() {
   async function submitBooking() {
     if (!termsAccepted) {
       setSubmitError("Please accept the Rental Terms & Conditions.");
-      return;
-    }
-    if (!date || !eventDateIsValid || !advanceOk) {
-      setSubmitError("Please choose a future event date.");
       return;
     }
     setSaving(true);
@@ -553,7 +530,7 @@ export default function Home() {
             alt="MARQuees Lights & Events"
           />
           <p className="eyebrow">
-            4-FT MARQUEE LETTER RENTALS • LAWRENCEVILLE, GA
+            4-FT MARQUEE LETTER RENTALS • ATLANTA AREA
           </p>
           <h1>{t.hero}</h1>
           <p className="lead">{t.sub}</p>
@@ -571,12 +548,11 @@ export default function Home() {
           </p>
           <small>
             ✦ {t.trust} &nbsp; · &nbsp;{" "}
-            <a href="tel:+14046713228">Call/Text +1 404-671-3228</a>
+            <a className="heroPhoneLink" href="tel:+14046713228" aria-label="Call or text MARQuees at 404-671-3228">Call/Text +1 404-671-3228</a>
           </small>
         </div>
       </section>
       <section className="how" id="how">
-        <p className="eyebrow">HOW IT WORKS</p>
         <h2>Booking your letters is easy</h2>
         <div>
           {[
@@ -664,9 +640,8 @@ export default function Home() {
               <p>Select the date, approximate start time and how you’ll receive the letters.</p>
               <div className="simpleGrid">
                 <label>Event date
-                  <input type="date" value={date} min={minEventDate} onChange={e=>handleDateChange(e.target.value)} />
+                  <input type="date" value={date} min={new Date(pageOpenedAt+86400000).toISOString().slice(0,10)} onChange={e=>setDate(e.target.value)} />
                 </label>
-                {date && !eventDateIsValid && <p className="error full">Please choose a future event date.</p>}
                 <label>Event ZIP code
                   <input inputMode="numeric" autoComplete="postal-code" value={zip} maxLength={5} onChange={e=>setZip(e.target.value.replace(/\D/g,"").slice(0,5))} placeholder="30046" />
                 </label>
@@ -699,7 +674,8 @@ export default function Home() {
                 </div>
               </div>}
               <div className="finalReview"><span><b>{displaySelection}</b> · {countLabel}</span><span>{date||"Date needed"} · {fulfillment==="pickup"?"Pickup":"Delivery"}</span><strong>Total {money(total)}</strong></div>
-              <label className="check"><input type="checkbox" checked={termsAccepted} onChange={e=>setTermsAccepted(e.target.checked)} /> I agree to the Rental Terms & Conditions.</label>
+              <label className="check"><input type="checkbox" checked={termsAccepted} onChange={e=>setTermsAccepted(e.target.checked)} /> <span>I have reviewed and agree to the <a href="/terms">Rental Terms &amp; Conditions</a>.</span></label>
+              <p className="bookingPrivacyNote">{lang === "en" ? "Please review our" : "Consulte nuestra"} <a href="/privacy">{lang === "en" ? "Privacy Policy" : "Política de privacidad"}</a>.</p>
               {submitError&&<p className="error">{submitError}</p>}
               <button className="simplePay" disabled={saving||!termsAccepted||!name||!email||!phone||(fulfillment==="delivery"&&!deliveryAddressComplete)} onClick={submitBooking}>{saving?"OPENING SECURE CHECKOUT…":`PAY ${money(total)} SECURELY →`}</button>
               <small className="stripe">Secure payment powered by Stripe.</small>
@@ -717,7 +693,7 @@ export default function Home() {
             <small>Standard rental up to 24 hours</small>
           </aside>
         </div>
-        <div className="mobileBookingBar"><span><small>Call now or book online</small><b>+1 404-671-3228</b></span><a className="mobileCallButton" href="tel:+14046713228">Call now</a>{step<3?<button disabled={!canNext||saving} onClick={goNext}>Book</button>:<button disabled={saving||!termsAccepted||!name||!email||!phone||(fulfillment==="delivery"&&!deliveryAddressComplete)} onClick={submitBooking}>Pay</button>}</div>
+        <div className="mobileBookingBar"><span><small>{displaySelection||"Your selection"} · {countLabel||"No items"}</small><b>{money(total)}</b></span>{step<3?<button disabled={!canNext||saving} onClick={goNext}>Continue →</button>:<button disabled={saving||!termsAccepted||!name||!email||!phone||(fulfillment==="delivery"&&!deliveryAddressComplete)} onClick={submitBooking}>Pay →</button>}</div>
       </section>
       <section className="pricing pricingRedesign" id="pricing">
         <div className="pricingCopy">
@@ -756,9 +732,10 @@ export default function Home() {
         </div>
         <div className="pricingVisual">
           <img
-            src="/brand/abcd-marquee-real.webp"
-            alt="Real illuminated A B C D marquee letters"
+            src="/brand/abcd-marquee-real-v2.webp"
+            alt="AI-generated illustrative photograph of illuminated A B C D marquee letters"
           />
+          <small className="pricingImageNote">Illustrative image; actual setups may vary.</small>
           <div className="pricingExamples">
             <article>
               <small>3 LETTERS</small>
@@ -782,12 +759,12 @@ export default function Home() {
       </section>
       <section className="gallerySection" id="gallery">
         <div className="sectionHead">
-          <p className="eyebrow">REAL EVENTS. REAL MOMENTS.</p>
+          <p className="eyebrow">EVENT INSPIRATION</p>
           <h2>Make your celebration shine</h2>
           <p>
-            From intimate birthdays to weddings, graduations and milestone
-            events.
+            Ideas for birthdays, weddings, graduations, quinceañeras and more.
           </p>
+          <p className="galleryNote">Some gallery images are AI-generated concepts for inspiration. Actual inventory and event setups may vary.</p>
         </div>
         <div className="galleryGrid">
           {gallery.map((x, i) => (
@@ -804,6 +781,12 @@ export default function Home() {
                     "GRADUATIONS",
                     "KIDS' PARTIES",
                     "SPECIAL DAYS",
+                    "GRADUATION CONCEPT",
+                    "PROM NIGHT CONCEPT",
+                    "BABY SHOWER CONCEPT",
+                    "75TH BIRTHDAY CONCEPT",
+                    "QUINCEAÑERA CONCEPT",
+                    "WELCOME CONCEPT",
                   ][i]
                 }
               </figcaption>
@@ -835,21 +818,36 @@ export default function Home() {
       </section>
       <section className="area" id="area">
         <div>
-          <p className="eyebrow">SERVICE AREA</p>
-          <h2>Lighting up Lawrenceville & nearby celebrations</h2>
-          <p>Local pickup plus flat-rate delivery for eligible local orders.</p>
-          <p className="cities">
-            Lawrenceville · Dacula · Grayson · Suwanee · Duluth · Lilburn ·
-            Snellville
-          </p>
+          <p className="eyebrow">LOCAL DELIVERY ZONE</p>
+          <h2>Local delivery across Gwinnett</h2>
+          <p className="areaIntro">Pickup is near Lawrenceville, with delivery available for eligible bookings in these priority areas:</p>
+          <div className="cityGrid">
+            {["Lawrenceville", "Dacula", "Grayson", "Suwanee", "Duluth", "Lilburn", "Snellville"].map((city, index) => (
+              <div className={index === 0 ? "cityTile primary" : "cityTile"} key={city}>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                <b>{city}</b>
+                <small>{index === 0 ? "Pickup + delivery" : "Local delivery"}</small>
+              </div>
+            ))}
+          </div>
         </div>
         <div className="zips">
-          <b>LOCAL DELIVERY</b>
-          <p>FLAT $75 FEE</p>
-          <small>
-            Enter the complete event address when booking. Our team will confirm
-            delivery details with you.
-          </small>
+          <div className="deliveryIcon" aria-hidden="true">
+            <svg viewBox="0 0 64 48" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 7h34v27H4zM38 17h12l10 11v6H38z" />
+              <path d="M42 18v10h17M10 16h21M10 22h14" />
+              <circle cx="16" cy="37" r="5" />
+              <circle cx="48" cy="37" r="5" />
+            </svg>
+          </div>
+          <div className="deliveryCopy">
+            <b>LOCAL DELIVERY</b>
+            <p>FLAT $75 FEE</p>
+            <small>
+              Available for eligible local bookings. Enter the full event address
+              and our team will confirm delivery details.
+            </small>
+          </div>
         </div>
       </section>
       <section className="faq" id="faq">
@@ -888,14 +886,25 @@ export default function Home() {
           alt="MARQuees Lights & Events"
         />
         <p>
-          4-Ft Marquee Letter Rentals · Lawrenceville, Georgia
+          4-Ft Marquee Letter Rentals · Atlanta Area
           <br />
           <a href="tel:+14046713228">+1 404-671-3228</a>
         </p>
+        <div className="footerLinks" role="group" aria-label={lang === "en" ? "Legal information" : "Información legal"}>
+          <a href="/terms">{lang === "en" ? "Rental Terms & Conditions" : "Términos y condiciones de alquiler"}</a>
+          <a href="/privacy">{lang === "en" ? "Privacy Policy" : "Política de privacidad"}</a>
+        </div>
         <p>© 2026 MARQuees Lights and Events. All Rights Reserved.</p>
+        <p className="footerDisclaimer">
+          {lang === "en" ? (
+            <>Booking requests are subject to availability. Final pricing, delivery or pickup details, and event-specific rental terms are confirmed in writing. Review our <a href="/terms">Rental Terms &amp; Conditions</a> and <a href="/privacy">Privacy Policy</a>.</>
+          ) : (
+            <>Las solicitudes de reserva están sujetas a disponibilidad. Confirmamos por escrito el precio final, los detalles de entrega o recogida y los términos específicos del alquiler. Consulte los <a href="/terms">Términos y condiciones de alquiler</a> y la <a href="/privacy">Política de privacidad</a>.</>
+          )}
+        </p>
       </footer>
-      <a className="mobile" href="tel:+14046713228">
-        CALL NOW · +1 404-671-3228
+      <a className="mobile" href="#book">
+        {t.build} · +1 404-671-3228
       </a>
     </main>
   );

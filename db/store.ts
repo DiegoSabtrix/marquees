@@ -1,3 +1,5 @@
+import { calculateBookingItems, selectionCountLabel, selectionName } from "../lib/booking-items";
+
 type Row = Record<string, unknown>;
 type Database = { kind: "postgres"; client: any } | { kind: "d1" };
 
@@ -53,13 +55,16 @@ async function connect(): Promise<Database> {
       idle_timeout: 20,
     });
     const statements = [
-      `CREATE TABLE IF NOT EXISTS bookings (id text PRIMARY KEY, created_at text NOT NULL, event_date text NOT NULL, start_time text NOT NULL, end_time text NOT NULL, phrase text NOT NULL, service text NOT NULL, fulfillment text NOT NULL, address text, address_2 text, city text, state text, zip text, delivery_miles double precision, delivery_fee double precision, floor text, elevator text, customer_name text NOT NULL, email text NOT NULL, phone text, event_type text, venue text, display_location text, notes text, total double precision NOT NULL, amount_paid double precision NOT NULL DEFAULT 0, payment_status text NOT NULL DEFAULT 'Unpaid', status text NOT NULL DEFAULT 'New request', letter_count integer NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS bookings (id text PRIMARY KEY, created_at text NOT NULL, event_date text NOT NULL, start_time text NOT NULL, end_time text NOT NULL, phrase text NOT NULL, service text NOT NULL, fulfillment text NOT NULL, address text, address_2 text, city text, state text, zip text, delivery_miles double precision, delivery_fee double precision, floor text, elevator text, customer_name text NOT NULL, email text NOT NULL, phone text, event_type text, venue text, display_location text, notes text, total double precision NOT NULL, amount_paid double precision NOT NULL DEFAULT 0, payment_status text NOT NULL DEFAULT 'Unpaid', status text NOT NULL DEFAULT 'New request', letter_count integer NOT NULL, selected_symbols text NOT NULL DEFAULT '[]', symbol_count integer NOT NULL DEFAULT 0, total_items integer NOT NULL DEFAULT 0)`,
       `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS address text`,
       `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS address_2 text`,
       `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS city text`,
       `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS state text`,
       `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_miles double precision`,
       `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_fee double precision`,
+      `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS selected_symbols text NOT NULL DEFAULT '[]'`,
+      `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS symbol_count integer NOT NULL DEFAULT 0`,
+      `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS total_items integer NOT NULL DEFAULT 0`,
       `CREATE TABLE IF NOT EXISTS stripe_settings (id text PRIMARY KEY, active_mode text NOT NULL DEFAULT 'test', test_publishable_key text, test_secret_key_encrypted text, test_webhook_secret_encrypted text, live_publishable_key text, live_secret_key_encrypted text, live_webhook_secret_encrypted text, updated_at text NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS booking_drafts (id text PRIMARY KEY, created_at text NOT NULL, updated_at text NOT NULL, current_step integer NOT NULL DEFAULT 1, status text NOT NULL DEFAULT 'In progress', email text, customer_name text, total double precision NOT NULL DEFAULT 0, data text NOT NULL, booking_id text)`,
       `CREATE TABLE IF NOT EXISTS payment_attempts (id text PRIMARY KEY, booking_id text NOT NULL, draft_id text, stripe_session_id text, mode text NOT NULL, amount double precision NOT NULL, status text NOT NULL, error text, created_at text NOT NULL, updated_at text NOT NULL)`,
@@ -187,11 +192,6 @@ export async function createPendingBooking(
     if (existing)
       return { id: String(existing.id), total: Number(existing.total) };
   }
-  const minEventTime = Date.now() + 86400000;
-  const eventTime = new Date(`${data.eventDate || ""}T${data.startTime || "00:00"}`).getTime();
-  if (!Number.isFinite(eventTime) || eventTime < minEventTime) {
-    throw new Error("Please choose a future event date.");
-  }
   if (
     data.fulfillment === "delivery" &&
     (!String(data.address || "").trim() ||
@@ -203,13 +203,11 @@ export async function createPendingBooking(
       "A complete Georgia delivery address is required before checkout.",
     );
   }
-  const phrase = String(data.phrase || "")
-    .toUpperCase()
-    .replace(/[^A-Z ]/g, "")
-    .trim();
-  const letters = phrase.replaceAll(" ", "");
-  const subtotal = letters.length * 55;
-  const rental = subtotal - (letters.length >= 4 ? subtotal * 0.1 : 0);
+  const items = calculateBookingItems(data.phrase, data.selectedSymbols);
+  const phrase = items.phrase.trim();
+  if (!items.totalItems) throw new Error("Choose at least one letter, number, or special symbol.");
+  if (items.shortage) throw new Error("Letter inventory exceeded");
+  const rental = items.rental;
   const deliveryFee = data.fulfillment === "delivery" ? 75 : 0;
   const total =
     rental +
@@ -221,7 +219,7 @@ export async function createPendingBooking(
       : 0);
   const id = `MLE-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
   await execute(
-    `INSERT INTO bookings (id,created_at,event_date,start_time,end_time,phrase,service,fulfillment,address,address_2,city,state,zip,delivery_miles,delivery_fee,floor,elevator,customer_name,email,phone,event_type,venue,display_location,notes,total,amount_paid,payment_status,status,letter_count) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO bookings (id,created_at,event_date,start_time,end_time,phrase,service,fulfillment,address,address_2,city,state,zip,delivery_miles,delivery_fee,floor,elevator,customer_name,email,phone,event_type,venue,display_location,notes,total,amount_paid,payment_status,status,letter_count,selected_symbols,symbol_count,total_items) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       new Date().toISOString(),
@@ -229,7 +227,7 @@ export async function createPendingBooking(
       data.startTime || "",
       data.endTime || "",
       phrase,
-      `${letters.length} × 4-ft marquee letters`,
+      `${selectionName(phrase, items.selectedSymbols)} · ${selectionCountLabel(items.letterCount, items.symbolCount)}`,
       data.fulfillment || "pickup",
       data.address || null,
       data.address2 || null,
@@ -251,7 +249,10 @@ export async function createPendingBooking(
       0,
       "Pending",
       "Awaiting payment",
-      letters.length,
+      items.letterCount,
+      JSON.stringify(items.selectedSymbols),
+      items.symbolCount,
+      items.totalItems,
     ],
   );
   await execute(

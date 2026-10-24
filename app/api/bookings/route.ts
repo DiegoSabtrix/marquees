@@ -1,5 +1,6 @@
 import { getDb } from "../../../db";
 import { bookings } from "../../../db/schema";
+import { calculateBookingItems, selectionCountLabel, selectionName } from "../../../lib/booking-items";
 
 export async function POST(request: Request) {
   const data = await request.json();
@@ -14,32 +15,19 @@ export async function POST(request: Request) {
       { error: "A complete Georgia delivery address is required." },
       { status: 400 },
     );
-  const minEventTime = Date.now() + 86400000;
-  const eventTime = new Date(`${data.eventDate || ""}T${data.startTime || "00:00"}`).getTime();
-  if (!Number.isFinite(eventTime) || eventTime < minEventTime)
-    return Response.json(
-      { error: "Please choose a future event date." },
-      { status: 400 },
-    );
-  const phrase = String(data.phrase || "")
-    .toUpperCase()
-    .replace(/[^A-Z ]/g, "")
-    .trim();
-  const letters = phrase.replaceAll(" ", "");
-  if (!letters || !data.eventDate || !data.customerName || !data.email)
+  const items = calculateBookingItems(data.phrase, data.selectedSymbols);
+  const phrase = items.phrase.trim();
+  if (!items.totalItems || !data.eventDate || !data.customerName || !data.email)
     return Response.json(
       { error: "Missing required information" },
       { status: 400 },
     );
-  const counts: Record<string, number> = {};
-  for (const letter of letters) counts[letter] = (counts[letter] || 0) + 1;
-  if (Object.values(counts).some((count) => count > 2))
+  if (items.shortage)
     return Response.json(
       { error: "Letter inventory exceeded" },
       { status: 400 },
     );
-  const subtotal = letters.length * 55;
-  const rental = subtotal - (letters.length >= 4 ? subtotal * 0.1 : 0);
+  const rental = items.rental;
   const delivery = data.fulfillment === "delivery" ? 75 : 0;
   const access =
     data.fulfillment === "delivery" &&
@@ -56,7 +44,7 @@ export async function POST(request: Request) {
     startTime: data.startTime || "",
     endTime: data.endTime || "",
     phrase,
-    service: `${letters.length} × 4-ft marquee letters`,
+    service: `${selectionName(phrase, items.selectedSymbols)} · ${selectionCountLabel(items.letterCount, items.symbolCount)}`,
     fulfillment: data.fulfillment || "pickup",
     address: data.address || null,
     address2: data.address2 || null,
@@ -78,7 +66,10 @@ export async function POST(request: Request) {
     amountPaid: 0,
     paymentStatus: "Unpaid",
     status: "New request",
-    letterCount: letters.length,
+    letterCount: items.letterCount,
+    selectedSymbols: JSON.stringify(items.selectedSymbols),
+    symbolCount: items.symbolCount,
+    totalItems: items.totalItems,
   });
   return Response.json({ id });
 }
