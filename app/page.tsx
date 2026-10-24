@@ -95,21 +95,21 @@ const heroSlides = [
     },
   },
   {
-    image: "/gallery/prom-event.webp",
+    image: "/gallery/2025-gold.webp",
     alt: {
-      en: "Glowing PROM marquee letters at an elegant celebration",
-      es: "Letras PROM iluminadas en una elegante celebración",
+      en: "Illuminated 2025 marquee numbers with black and gold balloons",
+      es: "Números marquee 2025 iluminados con globos negros y dorados",
     },
     copy: {
       en: {
-        eyebrow: "A STATEMENT FOR EVERY CELEBRATION",
-        headline: "MAKE YOUR EVENT SHINE.",
-        sub: "Give birthdays, proms, weddings and graduations a glowing centerpiece to remember.",
+        eyebrow: "MILESTONES, LIT TO SHINE",
+        headline: "MAKE EVERY YEAR SHINE.",
+        sub: "Celebrate birthdays and milestones with illuminated marquee numbers and letters.",
       },
       es: {
-        eyebrow: "UN DETALLE ESPECIAL PARA CADA CELEBRACIÓN",
-        headline: "HAZ BRILLAR TU CELEBRACIÓN.",
-        sub: "Dale a tu cumpleaños, prom, boda o graduación un detalle iluminado inolvidable.",
+        eyebrow: "CELEBRACIONES QUE BRILLAN",
+        headline: "HAZ BRILLAR CADA AÑO.",
+        sub: "Celebra cumpleaños y momentos especiales con números y letras marquee iluminados.",
       },
     },
   },
@@ -563,15 +563,12 @@ export default function Home() {
         </a>
       </nav>
       <section className="hero" id="top">
-        {heroSlides.map((slide, index) => (
-          <img
-            key={slide.image}
-            className={`heroPhoto${heroSlide === index ? " isActive" : ""}`}
-            src={slide.image}
-            alt={heroSlide === index ? slide.alt[lang] : ""}
-            aria-hidden={heroSlide !== index}
-          />
-        ))}
+        <img
+          key={activeHero.image}
+          className="heroPhoto"
+          src={activeHero.image}
+          alt={activeHero.alt[lang]}
+        />
         <div className="heroShade" />
         <div className="heroCopy">
           <img
